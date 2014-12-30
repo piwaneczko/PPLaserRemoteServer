@@ -12,7 +12,9 @@ using namespace std;
 
 BluetoothServer::BluetoothServer(GUI &gui) :
 gui(gui),
-listenThreadIsRunning()
+listenThreadIsRunning(),
+listenSocket(INVALID_SOCKET),
+clientSocket(INVALID_SOCKET)
 {
     gui.SetText(IDC_BTH_SERVER_STATUS, L"Initialization...");
     listenThread = thread(&BluetoothServer::ListenThread, this);
@@ -20,6 +22,10 @@ listenThreadIsRunning()
 BluetoothServer::~BluetoothServer() {
     if (listenThreadIsRunning) {
         listenThreadIsRunning = false;
+        if (clientSocket != INVALID_SOCKET) {
+            closesocket(clientSocket);
+            clientSocket = INVALID_SOCKET;
+        }
         if (listenSocket != INVALID_SOCKET) {
             closesocket(listenSocket);
             listenSocket = INVALID_SOCKET;
@@ -179,11 +185,10 @@ void BluetoothServer::ListenThread()
 
     uint8_t recv_buff[RECV_BUFF_MAX_LEN] = { 0 };
     int recvResult = 0;
-    SOCKET clientSocket = INVALID_SOCKET;
+    clientSocket = INVALID_SOCKET;
     SOCKADDR_BTH clientAddr = { 0 };
     int clientAddrLen = sizeof(SOCKADDR_BTH);
 
-    Sleep(1000);
     listenThreadIsRunning = true;
     while (listenThreadIsRunning) {
 
@@ -207,35 +212,32 @@ void BluetoothServer::ListenThread()
 
         gui.SetText(IDC_BTH_SERVER_STATUS, L"Connected");
         gui.SetText(IDC_BTH_CLIENT_NAME, BthAddrToName(clientAddr));
+        gui.Connected(this);
 
         while (listenThreadIsRunning) {
             recvResult = recv(clientSocket, (char *)recv_buff, RECV_BUFF_MAX_LEN, 0);
 
             if (recvResult == 0) {  // socket connection has been closed gracefully
-
                 gui.SetText(IDC_BTH_SERVER_STATUS, L"Device connection was lost!");
-                Sleep(1000);
                 break; // Break out of the for loop
             }
             else if (recvResult == SOCKET_ERROR) {
-
                 gui.SetText(IDC_BTH_SERVER_STATUS, L"recv Error!");
-                closesocket(listenSocket);
-                listenSocket = INVALID_SOCKET;
                 break; // Break out of the for loop
             }
             else {
                 //odebrano dane
-                gui.ProcRecvData(recv_buff, (uint16_t)recvResult);
+                gui.ProcRecvData(this, recv_buff, (uint16_t)recvResult);
             }
         }
+        gui.Disconnected(this);
+        Sleep(1000);
     }
-    if (INVALID_SOCKET != clientSocket) {
+    if (clientSocket != INVALID_SOCKET) {
         closesocket(clientSocket);
         clientSocket = INVALID_SOCKET;
     }
-
-    if (INVALID_SOCKET != listenSocket) {
+    if (listenSocket != INVALID_SOCKET) {
         closesocket(listenSocket);
         listenSocket = INVALID_SOCKET;
     }

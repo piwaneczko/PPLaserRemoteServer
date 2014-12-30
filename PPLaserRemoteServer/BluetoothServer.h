@@ -14,12 +14,12 @@
 /**
  * Klasa serwera Bluetooth
  */
-class BluetoothServer
+class BluetoothServer : public Serwer
 {
 private:
     GUI &gui;
     thread listenThread;
-    uint32_t listenSocket;
+    uint32_t listenSocket, clientSocket;
     bool listenThreadIsRunning;
     void ListenThread();
 public:

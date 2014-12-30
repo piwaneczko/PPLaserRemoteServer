@@ -11,6 +11,8 @@
 #include <iostream>
 #include <cstdint>
 #include <string>
+#include <deque>
+#include <mutex>
 #include <Windows.h>
 #include "resource.h"
 
@@ -18,21 +20,37 @@ using namespace std;
 
 #define REMOTE_SERVER_INSTANCE_STRING     L"Remote Server"
 #define DEFAULT_LISTEN_BACKLOG            4
-#define RECV_BUFF_MAX_LEN                 1024      /**< Maksymalny rozmiar bufora odebranych danych */
-// {F27B335A-E210-4AAD-B890-8BC66FF26F2B}
+#define RECV_BUFF_MAX_LEN                 19      /**< Maksymalny rozmiar bufora odebranych danych */
+// {f27b335a-e210-4aad-b890-8bc66ff26f2b}
 static const GUID guidServiceClass = 
 { 0xf27b335a, 0xe210, 0x4aad, { 0xb8, 0x90, 0x8b, 0xc6, 0x6f, 0xf2, 0x6f, 0x2b } };
 
+
+/**
+ * Klasa abstarackyjna serwera
+ */
+
+class Serwer {};
+
+/* Struktura prostok¹tu monitora */
+struct ScrrenRect {
+    int left, top, width, height;
+};
 
 /**
  * Klasa interfejsu graficznego. Klasa tworzy okno dialogowe oraz ikonê systemow¹
  */
 class GUI {
 private:
+    clock_t lastEventReceived;
+    deque<const Serwer *> connectedServers;
+    deque<ScrrenRect> screens;
+    mutex serverMutex;
     HWND hWnd;
     HINSTANCE hInstance;
     NOTIFYICONDATA niData;
     friend LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    friend BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
     void ShowContextMenu(HWND hWnd);
     // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
     GUI();
@@ -63,10 +81,21 @@ public:
     bool SetText(int textBoxId, const wstring &text);
     /**
      * Przetworzenie danych od zdalnego klienta
+     * \param[in] server WskaŸnik na serwer, który chce przetworzyæ dane (Mo¿e to zrobiæ tylko jeden z dwóch)
      * \param[in] data WskaŸnik na bufor odebranych danych
      * \param[in] dataLen D³ugoœæ danych
      */
-    void ProcRecvData(uint8_t buff[], uint16_t dataLen);
+    void ProcRecvData(const Serwer *server, uint8_t *buff, uint16_t dataLen);
+    /**
+     * Po³¹czenie klienta do serwera
+     * \param[in] server WskaŸnik na serwer, do którego po³¹czy³ siê klient
+     */
+    void Connected(const Serwer *server);
+    /**
+     * Roz³¹czenie klienta z serwera
+     * \param[in] server WskaŸnik na serwer, z którego ro³¹czy³ siê klient
+     */
+    void Disconnected(const Serwer *server);
 };
 
 #endif /* IG_GUI_H */

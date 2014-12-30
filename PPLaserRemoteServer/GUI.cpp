@@ -5,6 +5,8 @@
 */
 
 #include "GUI.h"
+#include <assert.h>
+#include <math.h>
 
 using namespace std;
 
@@ -12,6 +14,43 @@ using namespace std;
 #define SWM_SHOW	WM_APP + 1      /**< Show the window                   */
 #define SWM_HIDE	WM_APP + 2      /**< Hide the window                   */
 #define SWM_EXIT	WM_APP + 3      /**< Close the window                  */
+
+enum msg_type_t {
+    msg_type_key = 0,
+    msg_type_laser = 1,
+    msg_type_gesture = 2,
+    msg_type_gyro = 3
+};
+
+enum msg_key_type_t {
+    msg_key_type_esc = 0,
+    msg_key_type_f5 = 1,
+    msg_key_type_shf5 = 2,
+    msg_key_type_prev = 3,
+    msg_key_type_next = 4
+};
+
+#define CRC_INIT		0xFFFFu
+#define CRC_VALID		0xF0B8u
+
+/**
+ * Aktualizacja sumy kontrolnej
+ * \param crc Aktualna wartoœæ sumy kontrolnej
+ * \param byte Bajt do dodania do sumy
+ * \return Nowa wartoœæ sumy kontrolnej
+ */
+static uint16_t CrcUpdate(uint16_t crc, uint8_t byte)
+{
+    uint16_t h;
+
+    h = (uint8_t)(crc ^ byte);
+    h ^= (uint8_t)(uint16_t)(h << 4);
+    crc >>= 8;
+    crc ^= (uint16_t)(h << 8);
+    crc ^= (uint16_t)(h << 3);
+    crc ^= (uint16_t)(h >> 4);
+    return crc;
+}
 
 LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -23,8 +62,13 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             switch (lParam)
             {
             case WM_LBUTTONDBLCLK:
-                ShowWindow(hWnd, SW_RESTORE);
-                UpdateWindow(hWnd);
+                if (IsWindowVisible(hWnd)) {
+                    ShowWindow(hWnd, SW_HIDE);
+                }
+                else {
+                    ShowWindow(hWnd, SW_RESTORE);
+                    UpdateWindow(hWnd);
+                }
                 return 1;
             case WM_RBUTTONDOWN:
             case WM_CONTEXTMENU:
@@ -85,6 +129,24 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     return 0;
 }
+BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData)
+{
+    GUI *gui;
+    // uzyskanie wskaŸnika na glemm
+    gui = (GUI *)dwData;
+
+    if (gui != NULL) {
+        ScrrenRect rect = {
+            lprcMonitor->left,
+            lprcMonitor->top,
+            lprcMonitor->right - lprcMonitor->left,
+            lprcMonitor->bottom - lprcMonitor->top
+        };
+        gui->screens.push_back(rect);
+    }
+
+    return TRUE;
+}
 
 GUI::GUI() {
     hInstance = GetModuleHandle(0);
@@ -93,8 +155,8 @@ GUI::GUI() {
     HICON hIcon = (HICON)LoadImage(hInstance,
         MAKEINTRESOURCE(IDI_LASER_ICON),
         IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE);
-    SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
     SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+    SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
 
     if (hWnd == NULL) exit(1);
 
@@ -123,6 +185,12 @@ GUI::GUI() {
         niData.hIcon = NULL;
     ShowWindow(hWnd, SW_SHOWDEFAULT);
     UpdateWindow(hWnd);
+
+
+    // utworzenie okien na ka¿dym monitorze
+    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)this);
+    assert(screens.size() > 0);
+    lastEventReceived = 0;
 }
 GUI::~GUI() {
     Shell_NotifyIcon(NIM_DELETE, &niData);
@@ -182,7 +250,110 @@ bool GUI::SetText(int textBoxId, const wstring &text) {
     HWND textBox = GetDlgItem(hWnd, textBoxId);
     return (SendMessage(textBox, WM_SETTEXT, 0, (LPARAM)text.c_str()) == TRUE);
 }
-void GUI::ProcRecvData(uint8_t buff[], uint16_t dataLen)
+void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
 {
-
+    serverMutex.lock();
+    if (connectedServers.size() > 0 && connectedServers.front() == server && dataLen >= 2) {
+        uint16_t crc = CRC_INIT;
+        for (uint16_t i = 0; i < dataLen; i++) 
+            crc = CrcUpdate(crc, data[i]);
+        if (crc == CRC_VALID) {
+            clock_t eventReceived = clock();
+            //przetwarzanie danych tylko z pierwszego serwera
+            switch (data[0])
+            {
+            case msg_type_key:
+                switch (data[1])
+                {
+                case msg_key_type_esc:
+                    keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    break;
+                case msg_key_type_f5:
+                    keybd_event(VK_F5, MapVirtualKey(VK_F5, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_F5, MapVirtualKey(VK_F5, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    break;
+                case msg_key_type_shf5:
+                    keybd_event(VK_LSHIFT, MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_F5, MapVirtualKey(VK_F5, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_F5, MapVirtualKey(VK_F5, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_LSHIFT, MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    break;
+                case msg_key_type_prev:
+                    keybd_event(VK_LEFT, MapVirtualKey(VK_LEFT, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_LEFT, MapVirtualKey(VK_LEFT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    break;
+                case msg_key_type_next:
+                    keybd_event(VK_RIGHT, MapVirtualKey(VK_RIGHT, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_RIGHT, MapVirtualKey(VK_RIGHT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    break;
+                default:
+                    break;
+                }
+                break;
+            case msg_type_laser:
+                if (data[1]) {
+                    SetTrayIcon(IDI_LASER_ICON_ON, L"");
+                    keybd_event(VK_LCONTROL, MapVirtualKey(VK_LCONTROL, MAPVK_VK_TO_VSC), 0, 0);
+                    if ((eventReceived - lastEventReceived) < 5000) {
+                        // bez zmiany pozycji
+                        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                    }
+                    else {
+                        //wyœrodkowanie
+                        mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, 0x8000, 0x8000, 0, 0);
+                    }
+                }
+                else {
+                    SetTrayIcon(IDI_LASER_ICON_OFF, L"");
+                    keybd_event(VK_LCONTROL, MapVirtualKey(VK_LCONTROL, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                }
+                break;
+            case msg_type_gesture:
+                if (dataLen == 11) {
+                    int ints[2], dx, dy;
+                    memcpy(&ints[0], &data[1], 8);
+                    dx = int(float(ints[0]) * screens[0].width / 1000000.0f);
+                    dy = int(float(ints[1]) * screens[0].height / 1000000.0f);                    
+                    mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
+                }
+                break;
+            case msg_type_gyro:
+                if (dataLen == 11) {
+                    int ints[2], dx, dy;
+                    memcpy(&ints, &data[1], 8);
+                    dx = int(float(ints[0]) / 1000000.0f * screens[0].width / float(M_PI / 3.0));
+                    dy = int(float(ints[1]) / 1000000.0f * screens[0].width / float(M_PI / 3.0));
+                    mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
+                }
+                break;
+            }
+            lastEventReceived = eventReceived;
+        }
+    }
+    serverMutex.unlock();
+}
+void GUI::Connected(const Serwer *server)
+{
+    serverMutex.lock();
+    if (connectedServers.size() == 0) {
+        SetTrayIcon(IDI_LASER_ICON_OFF, L"Remote client connected!");
+    }
+    if (find(connectedServers.begin(), connectedServers.end(), server) == connectedServers.end()) {
+        connectedServers.push_back(server);
+    }
+    serverMutex.unlock();
+}
+void GUI::Disconnected(const Serwer *server)
+{
+    serverMutex.lock();
+    auto server_it = find(connectedServers.begin(), connectedServers.end(), server);
+    if (server_it != connectedServers.end()) {
+        connectedServers.erase(server_it);
+    }
+    if (connectedServers.size() == 0) {
+        SetTrayIcon(IDI_LASER_ICON, L"Remote client disconnected!");
+    }
+    serverMutex.unlock();
 }

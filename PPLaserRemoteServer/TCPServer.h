@@ -14,12 +14,12 @@
 /**
  * Klasa serwera TCP/IP
  */
-class TCPServer
+class TCPServer : public Serwer
 {
 private:
     GUI &gui;
     thread listenThread;
-    uint32_t listenSocket;
+    uint32_t listenSocket, clientSocket;
     bool listenThreadIsRunning;
     void ListenThread();
 public:
