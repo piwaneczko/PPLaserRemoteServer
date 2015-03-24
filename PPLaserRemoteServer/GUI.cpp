@@ -28,8 +28,12 @@ enum msg_key_type_t {
     msg_key_type_shf5 = 2,
     msg_key_type_prev = 3,
     msg_key_type_next = 4,
-    msg_key_type_left_click = 5,
-    msg_key_type_right_click = 6
+    msg_key_type_left_down = 5,
+    msg_key_type_left_up = 6,
+    msg_key_type_right_down = 7,
+    msg_key_type_right_up = 8,
+    msg_key_type_volume_down = 9,
+    msg_key_type_volume_up = 10
 };
 
 #define CRC_INIT		0xFFFFu
@@ -210,6 +214,7 @@ void GUI::ShowContextMenu(HWND hWnd)
             InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SHOW, L"Show");
         InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_EXIT, L"Exit");
 
+
         // note:	must set window to the foreground or the
         //			menu won't disappear when it should
         SetForegroundWindow(hWnd);
@@ -289,13 +294,25 @@ void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
                     keybd_event(VK_RIGHT, MapVirtualKey(VK_RIGHT, MAPVK_VK_TO_VSC), 0, 0);
                     keybd_event(VK_RIGHT, MapVirtualKey(VK_RIGHT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
                     break;
-                case msg_key_type_left_click:
+                case msg_key_type_left_down:
                     mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                    break;
+                case msg_key_type_left_up:
                     mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
                     break;
-                case msg_key_type_right_click:
+                case msg_key_type_right_down:
                     mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+                    break;
+                case msg_key_type_right_up:
                     mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+                    break;
+                case msg_key_type_volume_down:
+                    keybd_event(VK_VOLUME_DOWN, MapVirtualKey(VK_VOLUME_DOWN, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_VOLUME_DOWN, MapVirtualKey(VK_VOLUME_DOWN, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    break;
+                case msg_key_type_volume_up:
+                    keybd_event(VK_VOLUME_UP, MapVirtualKey(VK_VOLUME_UP, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_VOLUME_UP, MapVirtualKey(VK_VOLUME_UP, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
                     break;
                 default:
                     break;
