@@ -19,7 +19,7 @@ class BluetoothServer : public Serwer
 private:
     GUI &gui;
     thread listenThread;
-    uint32_t listenSocket, clientSocket;
+    uint32_t serverSocket, clientSocket;
     bool listenThreadIsRunning;
     void ListenThread();
 public:

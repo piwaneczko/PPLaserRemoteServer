@@ -13,7 +13,7 @@ using namespace std;
 BluetoothServer::BluetoothServer(GUI &gui) :
 gui(gui),
 listenThreadIsRunning(),
-listenSocket(INVALID_SOCKET),
+serverSocket(INVALID_SOCKET),
 clientSocket(INVALID_SOCKET)
 {
     gui.SetText(IDC_BTH_SERVER_STATUS, L"Initialization...");
@@ -26,9 +26,9 @@ BluetoothServer::~BluetoothServer() {
             closesocket(clientSocket);
             clientSocket = INVALID_SOCKET;
         }
-        if (listenSocket != INVALID_SOCKET) {
-            closesocket(listenSocket);
-            listenSocket = INVALID_SOCKET;
+        if (serverSocket != INVALID_SOCKET) {
+            closesocket(serverSocket);
+            serverSocket = INVALID_SOCKET;
         }
         listenThread.join();
     }
@@ -116,9 +116,9 @@ void BluetoothServer::ListenThread()
         gui.SetText(IDC_BTH_SERVER_NAME, szThisComputerName);
     }
 
-    listenSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
-    if (listenSocket == INVALID_SOCKET) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"socket Error!");
+    serverSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
+    if (serverSocket == INVALID_SOCKET) {
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"Bluetooth not available!");
         listenThread.detach();
         return;
     }
@@ -128,22 +128,22 @@ void BluetoothServer::ListenThread()
     sockAddrBthLocal.addressFamily = AF_BTH;
     sockAddrBthLocal.port = BT_PORT_ANY;
 
-    if (SOCKET_ERROR == ::bind(listenSocket,
+    if (SOCKET_ERROR == ::bind(serverSocket,
         (struct sockaddr *) &sockAddrBthLocal,
         sizeof(SOCKADDR_BTH))) {
         gui.SetText(IDC_BTH_SERVER_STATUS, L"bind Error!");
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
+        closesocket(serverSocket);
+        serverSocket = INVALID_SOCKET;
         listenThread.detach();
         return;
     }
 
-    if (SOCKET_ERROR == getsockname(listenSocket,
+    if (SOCKET_ERROR == getsockname(serverSocket,
         (struct sockaddr *)&sockAddrBthLocal,
         &sockAddrBthLocalLen)) {
         gui.SetText(IDC_BTH_SERVER_STATUS, L"getsockname Error!");
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
+        closesocket(serverSocket);
+        serverSocket = INVALID_SOCKET;
         listenThread.detach();
         return;
     }
@@ -169,16 +169,16 @@ void BluetoothServer::ListenThread()
 
     if (SOCKET_ERROR == WSASetService(&wsaQuerySet, RNRSERVICE_REGISTER, 0)) {
         gui.SetText(IDC_BTH_SERVER_STATUS, L"WSASetService Error!");
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
+        closesocket(serverSocket);
+        serverSocket = INVALID_SOCKET;
         listenThread.detach();
         return;
     }
 
-    if (SOCKET_ERROR == listen(listenSocket, DEFAULT_LISTEN_BACKLOG)) {
+    if (SOCKET_ERROR == listen(serverSocket, DEFAULT_LISTEN_BACKLOG)) {
         gui.SetText(IDC_BTH_SERVER_STATUS, L"listen Error!");
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
+        closesocket(serverSocket);
+        serverSocket = INVALID_SOCKET;
         listenThread.detach();
         return;
     }
@@ -195,14 +195,14 @@ void BluetoothServer::ListenThread()
         gui.SetText(IDC_BTH_CLIENT_NAME, L"None");
         gui.SetText(IDC_BTH_SERVER_STATUS, L"Listening...");
 
-        clientSocket = accept(listenSocket,
+        clientSocket = accept(serverSocket,
             (struct sockaddr *)&clientAddr,
             &clientAddrLen);
         if (INVALID_SOCKET == clientSocket) {
             if (listenThreadIsRunning) {
                 gui.SetText(IDC_BTH_SERVER_STATUS, L"accept Error!");
-                closesocket(listenSocket);
-                listenSocket = INVALID_SOCKET;
+                closesocket(serverSocket);
+                serverSocket = INVALID_SOCKET;
             }
             else {
                 gui.SetText(IDC_BTH_SERVER_STATUS, L"Ending listening");
@@ -237,9 +237,9 @@ void BluetoothServer::ListenThread()
         closesocket(clientSocket);
         clientSocket = INVALID_SOCKET;
     }
-    if (listenSocket != INVALID_SOCKET) {
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
+    if (serverSocket != INVALID_SOCKET) {
+        closesocket(serverSocket);
+        serverSocket = INVALID_SOCKET;
     }
     listenThreadIsRunning = false;
 }

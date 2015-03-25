@@ -240,7 +240,7 @@ void GUI::MainLoop() {
 bool GUI::SetTrayIcon(int iconId, const wstring &info) {
     // This text will be shown as the icon's info.
     wsprintf(niData.szInfo, info.c_str());
-    if (IDI_LASER_ICON <= iconId && iconId <= IDI_TCP) {
+    if (IDI_LASER_ICON <= iconId && iconId <= IDI_UDP) {
         niData.hIcon = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(iconId),
             IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
             LR_DEFAULTCOLOR);

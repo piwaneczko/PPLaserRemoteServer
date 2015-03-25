@@ -1,35 +1,35 @@
 /**
-* \brief Nag³ówek klasy serwera TCP/IP
-* \file TCPServer.h
+* \brief Nag³ówek klasy serwera UDP/IP
+* \file UDPServer.h
 * \author Pawe³ Iwaneczko
 */
 
 #pragma once
-#ifndef IG_TCP_SERVER_H
-#define IG_TCP_SERVER_H
+#ifndef IG_UDP_SERVER_H
+#define IG_UDP_SERVER_H
 
 #include <thread>
 #include "GUI.h"
 
 /**
- * Klasa serwera TCP/IP
+ * Klasa serwera UDP/IP
  */
-class TCPServer : public Serwer
+class UDPServer : public Serwer
 {
 private:
     GUI &gui;
     thread listenThread;
-    uint32_t listenSocket, clientSocket;
+    uint32_t serverSocket;
     bool listenThreadIsRunning;
     void ListenThread();
 public:
     /**
-     * Konstruktor klasy serwera TCP/IP
+     * Konstruktor klasy serwera UDP/IP
      * \param[in] gui Referencja na intefrejs graficzny
      */
-    TCPServer(GUI &gui);
+    UDPServer(GUI &gui);
     /* Destruktor klasy */
-    ~TCPServer();
+    ~UDPServer();
 };
 
-#endif /* IG_TCP_SERVER_H */
+#endif /* IG_UDP_SERVER_H */

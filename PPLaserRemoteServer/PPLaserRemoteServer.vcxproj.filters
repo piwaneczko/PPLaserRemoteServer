@@ -24,7 +24,7 @@
     <ClCompile Include="BluetoothServer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TCPServer.cpp">
+    <ClCompile Include="UDPServer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -41,7 +41,7 @@
     <Image Include="bluetooth.ico">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="tcp.ico">
+    <Image Include="UDP.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
@@ -55,7 +55,7 @@
     <ClInclude Include="BluetoothServer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="TCPServer.h">
+    <ClInclude Include="UDPServer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

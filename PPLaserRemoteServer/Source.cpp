@@ -1,5 +1,5 @@
 #include "BluetoothServer.h"
-#include "TCPServer.h"
+#include "UDPServer.h"
 #include "GUI.h"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -7,7 +7,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     GUI &gui = GUI::GetInstance();
     {
         BluetoothServer bth(gui);
-        TCPServer tcp(gui);
+        UDPServer UDP(gui);
         gui.MainLoop();
     }
     return 0;
