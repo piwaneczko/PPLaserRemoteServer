@@ -20,6 +20,9 @@ private:
     GUI &gui;
     thread listenThread;
     uint32_t serverSocket;
+    sockaddr_in clientAddr;
+    int clientAddrLen;
+    string clientIP;
     bool listenThreadIsRunning;
     void ListenThread();
 public:

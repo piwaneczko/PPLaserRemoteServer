@@ -10,10 +10,14 @@
 
 using namespace std;
 
+uint8_t hellomsg[6] = { 0xFF, 0xEE, 0x77, 0x88, 0x3A, 0x95 };
+uint8_t byemsg[6] = { 0xBB, 0xAA, 0xEE, 0x00, 0x73, 0x52 };
+
 UDPServer::UDPServer(GUI &gui) :
 gui(gui),
 listenThreadIsRunning(),
-serverSocket(INVALID_SOCKET)
+serverSocket(INVALID_SOCKET),
+clientIP("")
 {
     gui.SetText(IDC_UDP_SERVER_STATUS, L"Initialization...");
     listenThread = thread(&UDPServer::ListenThread, this);
@@ -22,12 +26,16 @@ UDPServer::~UDPServer() {
     if (listenThreadIsRunning) {
         listenThreadIsRunning = false;
         if (serverSocket != INVALID_SOCKET) {
+            if (!clientIP.empty())
+                sendto(serverSocket, (char *)byemsg, 6, 0, (struct sockaddr *)&clientAddr, clientAddrLen);
             closesocket(serverSocket);
             serverSocket = INVALID_SOCKET;
+            WSACleanup();
         }
         listenThread.join();
     }
 }
+
 void UDPServer::ListenThread()
 {
     WSAData wsaData;
@@ -95,14 +103,22 @@ void UDPServer::ListenThread()
         gui.SetText(IDC_UDP_CLIENT_IP, L"None");
         gui.SetText(IDC_UDP_SERVER_STATUS, L"Listening...");
 
-		recvResult = recvfrom(serverSocket, (char *)recv_buff, RECV_BUFF_MAX_LEN, 0,
-			(struct sockaddr *)&clientAddr,
-			&clientAddrLen);
+        this->clientIP = "";
+        this->clientAddr = { 0 };
+        this->clientAddrLen = sizeof(sockaddr_in);
 
-		if (recvResult > 0) {
+		recvResult = recvfrom(serverSocket, (char *)recv_buff, RECV_BUFF_MAX_LEN, 0,
+			(struct sockaddr *)&this->clientAddr,
+            &this->clientAddrLen);
+
+        if (recvResult == 6 && !memcmp(recv_buff, hellomsg, 6)) {
+            //wys³anie potwierdzenia po³¹czenia
+            if(sendto(serverSocket, (char *)hellomsg, 6, 0, (struct sockaddr *)&this->clientAddr, this->clientAddrLen) != 6)
+                continue;
+
 			//po³¹czono z klientem, zapisanie ip (tylko jeden user)
 			gui.SetText(IDC_UDP_SERVER_STATUS, L"Connected");
-			string clientIP = inet_ntoa(clientAddr.sin_addr);
+            clientIP = inet_ntoa(this->clientAddr.sin_addr);
 			gui.SetText(IDC_UDP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
 			gui.Connected(this);
 
@@ -111,10 +127,11 @@ void UDPServer::ListenThread()
 					(struct sockaddr *)&clientAddr,
 					&clientAddrLen);
 
-				if (string(inet_ntoa(clientAddr.sin_addr)) != clientIP)
-					continue;
+                if (string(inet_ntoa(clientAddr.sin_addr)) != clientIP)
+                    continue;
 
-				if (recvResult == 0) {  // socket connection has been closed gracefully
+                if (recvResult == 0 || (recvResult == 6 && !memcmp(recv_buff, byemsg, 6))) {  
+                    // socket connection has been closed gracefully
 					gui.SetText(IDC_UDP_SERVER_STATUS, L"Device connection was lost!");
 					break; // Break out of the for loop
 				}
