@@ -231,6 +231,8 @@ GUI& GUI::GetInstance() {
 void GUI::MainLoop() {
     // Pêtla komunikatów
     MSG msg;
+    Sleep(2000);
+    ShowWindow(hWnd, SW_HIDE);
     while (GetMessage(&msg, NULL, 0, 0))
     {
         TranslateMessage(&msg);
