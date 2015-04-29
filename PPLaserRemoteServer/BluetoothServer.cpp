@@ -10,6 +10,8 @@
 
 using namespace std;
 
+#define RECV_BUFF_MAX_LEN                 19      /**< Maksymalny rozmiar bufora odebranych danych */
+
 BluetoothServer::BluetoothServer(GUI &gui) :
 gui(gui),
 listenThreadIsRunning(),
@@ -100,7 +102,7 @@ void BluetoothServer::ListenThread()
 {
     WSADATA WSAData;
     if (WSAStartup(MAKEWORD(2, 2), &WSAData)) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"WSAStartup error!");
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"WSAStartup error!", GUI::wsShow);
         return;
     }
 
@@ -108,7 +110,7 @@ void BluetoothServer::ListenThread()
     DWORD           dwLenComputerName = MAX_COMPUTERNAME_LENGTH + 1;
 
     if (!GetComputerName(szThisComputerName, &dwLenComputerName)) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"GetComputerName Error!");
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"GetComputerName Error!", GUI::wsShow);
         listenThread.detach();
         return;
     }
@@ -118,7 +120,7 @@ void BluetoothServer::ListenThread()
 
     serverSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
     if (serverSocket == INVALID_SOCKET) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"Bluetooth not available!");
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"socket Error!", GUI::wsShow);
         listenThread.detach();
         return;
     }
@@ -131,7 +133,7 @@ void BluetoothServer::ListenThread()
     if (SOCKET_ERROR == ::bind(serverSocket,
         (struct sockaddr *) &sockAddrBthLocal,
         sizeof(SOCKADDR_BTH))) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"bind Error!");
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"bind Error!", GUI::wsShow);
         closesocket(serverSocket);
         serverSocket = INVALID_SOCKET;
         listenThread.detach();
@@ -141,7 +143,7 @@ void BluetoothServer::ListenThread()
     if (SOCKET_ERROR == getsockname(serverSocket,
         (struct sockaddr *)&sockAddrBthLocal,
         &sockAddrBthLocalLen)) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"getsockname Error!");
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"getsockname Error!", GUI::wsShow);
         closesocket(serverSocket);
         serverSocket = INVALID_SOCKET;
         listenThread.detach();
@@ -168,7 +170,7 @@ void BluetoothServer::ListenThread()
     wsaQuerySet.lpcsaBuffer = &clientSocketAddrInfo;  // Req'd.
 
     if (SOCKET_ERROR == WSASetService(&wsaQuerySet, RNRSERVICE_REGISTER, 0)) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"WSASetService Error!");
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"WSASetService Error!", GUI::wsShow);
         closesocket(serverSocket);
         serverSocket = INVALID_SOCKET;
         listenThread.detach();
@@ -176,7 +178,7 @@ void BluetoothServer::ListenThread()
     }
 
     if (SOCKET_ERROR == listen(serverSocket, DEFAULT_LISTEN_BACKLOG)) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"listen Error!");
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"listen Error!", GUI::wsShow);
         closesocket(serverSocket);
         serverSocket = INVALID_SOCKET;
         listenThread.detach();
@@ -190,6 +192,7 @@ void BluetoothServer::ListenThread()
     int clientAddrLen = sizeof(SOCKADDR_BTH);
 
     listenThreadIsRunning = true;
+    gui.SetText(IDC_BTH_CLIENT_NAME, L"None", GUI::wsTimedHide);
     while (listenThreadIsRunning) {
 
         gui.SetText(IDC_BTH_CLIENT_NAME, L"None");
@@ -200,7 +203,7 @@ void BluetoothServer::ListenThread()
             &clientAddrLen);
         if (INVALID_SOCKET == clientSocket) {
             if (listenThreadIsRunning) {
-                gui.SetText(IDC_BTH_SERVER_STATUS, L"accept Error!");
+                gui.SetText(IDC_BTH_SERVER_STATUS, L"accept Error!", GUI::wsShow);
                 closesocket(serverSocket);
                 serverSocket = INVALID_SOCKET;
             }
@@ -222,7 +225,7 @@ void BluetoothServer::ListenThread()
                 break; // Break out of the for loop
             }
             else if (recvResult == SOCKET_ERROR) {
-                gui.SetText(IDC_BTH_SERVER_STATUS, L"recv Error!");
+                gui.SetText(IDC_BTH_SERVER_STATUS, L"recv Error!", GUI::wsShow);
                 break; // Break out of the for loop
             }
             else {

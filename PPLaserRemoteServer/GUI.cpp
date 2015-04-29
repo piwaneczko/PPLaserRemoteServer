@@ -14,13 +14,7 @@ using namespace std;
 #define SWM_SHOW	WM_APP + 1      /**< Show the window                   */
 #define SWM_HIDE	WM_APP + 2      /**< Hide the window                   */
 #define SWM_EXIT	WM_APP + 3      /**< Close the window                  */
-
-enum msg_type_t {
-    msg_type_key = 0,
-    msg_type_laser = 1,
-    msg_type_gesture = 2,
-    msg_type_gyro = 3
-};
+#define ID_TIMER 1
 
 enum msg_key_type_t {
     msg_key_type_esc = 0,
@@ -33,7 +27,9 @@ enum msg_key_type_t {
     msg_key_type_right_down = 7,
     msg_key_type_right_up = 8,
     msg_key_type_volume_down = 9,
-    msg_key_type_volume_up = 10
+    msg_key_type_volume_up = 10,
+    msg_key_type_zoom_in = 11,
+    msg_key_type_zoom_out = 12
 };
 
 #define CRC_INIT		0xFFFFu
@@ -108,7 +104,10 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 break;
             }
             return 1;
-
+        case WM_TIMER:
+            KillTimer(hWnd, ID_TIMER);
+            ShowWindow(hWnd, SW_HIDE);
+            break;
         case WM_DESTROY:
             PostQuitMessage(0);
             break;
@@ -197,6 +196,7 @@ GUI::GUI() {
     EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)this);
     assert(screens.size() > 0);
     lastEventReceived = 0;
+    zoomCount = 1;
 }
 GUI::~GUI() {
     Shell_NotifyIcon(NIM_DELETE, &niData);
@@ -231,8 +231,6 @@ GUI& GUI::GetInstance() {
 void GUI::MainLoop() {
     // Pêtla komunikatów
     MSG msg;
-    Sleep(2000);
-    ShowWindow(hWnd, SW_HIDE);
     while (GetMessage(&msg, NULL, 0, 0))
     {
         TranslateMessage(&msg);
@@ -242,7 +240,7 @@ void GUI::MainLoop() {
 bool GUI::SetTrayIcon(int iconId, const wstring &info) {
     // This text will be shown as the icon's info.
     wsprintf(niData.szInfo, info.c_str());
-    if (IDI_LASER_ICON <= iconId && iconId <= IDI_UDP) {
+    if (IDI_LASER_ICON <= iconId && iconId <= IDI_TCP) {
         niData.hIcon = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(iconId),
             IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
             LR_DEFAULTCOLOR);
@@ -255,10 +253,30 @@ bool GUI::SetTrayIcon(int iconId, const wstring &info) {
 
     return result;
 }
-bool GUI::SetText(int textBoxId, const wstring &text) {
+bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) {
     HWND textBox = GetDlgItem(hWnd, textBoxId);
-    return (SendMessage(textBox, WM_SETTEXT, 0, (LPARAM)text.c_str()) == TRUE);
+    int result = TRUE;
+    switch (windowState)
+    {
+    case GUI::wsShow:
+        ShowWindow(hWnd, SW_SHOW);
+        break;
+    case GUI::wsHide:
+        ShowWindow(hWnd, SW_HIDE);
+        break;
+    case GUI::wsTimedHide:
+        result &= SetTimer(hWnd, ID_TIMER, 2000, NULL);
+        break;
+    default:
+        break;
+    }
+    result &= SendMessage(textBox, WM_SETTEXT, 0, (LPARAM)text.c_str());
+    return (result == TRUE);
 }
+#if _DEBUG
+size_t debugGoodCount = 0;
+size_t debugBadCount = 0;
+#endif
 void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
 {
     serverMutex.lock();
@@ -266,6 +284,13 @@ void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
         uint16_t crc = CRC_INIT;
         for (uint16_t i = 0; i < dataLen; i++) 
             crc = CrcUpdate(crc, data[i]);
+#if _DEBUG
+        if (crc == CRC_VALID)
+            debugGoodCount++;
+        else
+            debugBadCount++;
+        SetText(IDC_TCP_SERVER_STATUS, L"Connected " + to_wstring(debugGoodCount) + L"/" + to_wstring(debugGoodCount + debugBadCount));
+#endif
         if (crc == CRC_VALID) {
             clock_t eventReceived = clock();
             //przetwarzanie danych tylko z pierwszego serwera
@@ -316,6 +341,27 @@ void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
                     keybd_event(VK_VOLUME_UP, MapVirtualKey(VK_VOLUME_UP, MAPVK_VK_TO_VSC), 0, 0);
                     keybd_event(VK_VOLUME_UP, MapVirtualKey(VK_VOLUME_UP, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
                     break;
+                case msg_key_type_zoom_in:
+                    keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_ADD, MapVirtualKey(VK_ADD, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_ADD, MapVirtualKey(VK_ADD, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    zoomCount++;
+                    break;
+                case msg_key_type_zoom_out:
+                    keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), 0, 0);
+                    if (zoomCount > 1)
+                        zoomCount--;
+                    if (zoomCount > 1) {
+                        keybd_event(VK_SUBTRACT, MapVirtualKey(VK_SUBTRACT, MAPVK_VK_TO_VSC), 0, 0);
+                        keybd_event(VK_SUBTRACT, MapVirtualKey(VK_SUBTRACT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    }
+                    else {
+                        keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC), 0, 0);
+                        keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    }
+                    keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    break;
                 default:
                     break;
                 }
@@ -343,8 +389,8 @@ void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
                 if (dataLen == 11) {
                     int ints[2], dx, dy;
                     memcpy(&ints[0], &data[1], 8);
-                    dx = int(float(ints[0]) * screens[0].width / 1000000.0f);
-                    dy = int(float(ints[1]) * screens[0].height / 1000000.0f);                    
+                    dx = int(float(ints[0]) * screens[0].width / (zoomCount * 1000000.0f));
+                    dy = int(float(ints[1]) * screens[0].height / (zoomCount * 1000000.0f));
                     mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
                 }
                 break;
@@ -352,8 +398,8 @@ void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
                 if (dataLen == 11) {
                     int ints[2], dx, dy;
                     memcpy(&ints, &data[1], 8);
-                    dx = int(float(ints[0]) / 1000000.0f * screens[0].width / float(M_PI / 3.0));
-                    dy = int(float(ints[1]) / 1000000.0f * screens[0].width / float(M_PI / 3.0));
+                    dx = int(float(ints[0]) / (zoomCount * 1000000.0f) * screens[0].width / float(M_PI / 3.0));
+                    dy = int(float(ints[1]) / (zoomCount * 1000000.0f) * screens[0].width / float(M_PI / 3.0));
                     mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
                 }
                 break;

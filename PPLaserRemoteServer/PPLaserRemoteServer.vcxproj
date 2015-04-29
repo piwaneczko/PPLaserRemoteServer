@@ -84,20 +84,20 @@
     <ClCompile Include="BluetoothServer.cpp" />
     <ClCompile Include="GUI.cpp" />
     <ClCompile Include="Source.cpp" />
-    <ClCompile Include="UDPServer.cpp" />
+    <ClCompile Include="TCPServer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="bluetooth.ico" />
     <Image Include="laser_icon.ico" />
     <Image Include="laser_icon_off.ico" />
     <Image Include="laser_icon_on.ico" />
-    <Image Include="UDP.ico" />
+    <Image Include="tcp.ico" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BluetoothServer.h" />
     <ClInclude Include="GUI.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="UDPServer.h" />
+    <ClInclude Include="TCPServer.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Laser Remote Server.rc" />

@@ -20,11 +20,17 @@ using namespace std;
 
 #define REMOTE_SERVER_INSTANCE_STRING     L"Remote Server"
 #define DEFAULT_LISTEN_BACKLOG            4
-#define RECV_BUFF_MAX_LEN                 19      /**< Maksymalny rozmiar bufora odebranych danych */
 // {f27b335a-e210-4aad-b890-8bc66ff26f2b}
 static const GUID guidServiceClass = 
 { 0xf27b335a, 0xe210, 0x4aad, { 0xb8, 0x90, 0x8b, 0xc6, 0x6f, 0xf2, 0x6f, 0x2b } };
 
+/* Lista wyliczeniowa typu komunikatów */
+enum msg_type_t {
+    msg_type_key = 0,               /**< Klawisz     */
+    msg_type_laser = 1,             /**< Laser       */
+    msg_type_gesture = 2,           /**< Gest myszk¹ */
+    msg_type_gyro = 3               /**< ¯yroskop    */
+};
 
 /**
  * Klasa abstarackyjna serwera
@@ -43,6 +49,7 @@ struct ScrrenRect {
 class GUI {
 private:
     clock_t lastEventReceived;
+    size_t zoomCount;
     deque<const Serwer *> connectedServers;
     deque<ScrrenRect> screens;
     mutex serverMutex;
@@ -57,6 +64,14 @@ private:
     //Destruktor - usuwa ikonê systemow¹
     ~GUI();
 public:
+    /* Lista wyliczeniowa stau okna */
+    enum window_state
+    {
+        wsDefault,              /**< Bez zmiany stanu okna */
+        wsShow,                 /**< Pokazanie okna        */
+        wsHide,                 /**< Ukrycie okna          */
+        wsTimedHide             /**< Ukrycie okna po 2s    */
+    };
     /**
      * Pobieranie instancji klasy interfejsu graficznego aplikacji
      * \return Referencja na statyczny obiekt typu GUI
@@ -77,8 +92,9 @@ public:
      * Ustawienie textu pola tekstowego
      * \param[in] textBoxId Identyfikator pola tekstowego. Wartoœci od 1001 do 1006
      * \param[in] text Text pola tekstowego
+     * \param[in] windowState Stan okna
      */
-    bool SetText(int textBoxId, const wstring &text);
+    bool SetText(int textBoxId, const wstring &text, window_state windowState = wsDefault);
     /**
      * Przetworzenie danych od zdalnego klienta
      * \param[in] server WskaŸnik na serwer, który chce przetworzyæ dane (Mo¿e to zrobiæ tylko jeden z dwóch)
