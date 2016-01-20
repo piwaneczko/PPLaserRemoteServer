@@ -49,7 +49,7 @@ struct ScrrenRect {
 class GUI {
 private:
     clock_t lastEventReceived;
-    size_t zoomCount;
+    int zoomCount;
     deque<const Serwer *> connectedServers;
     deque<ScrrenRect> screens;
     mutex serverMutex;
