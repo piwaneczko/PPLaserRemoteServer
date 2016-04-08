@@ -265,7 +265,7 @@ bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) 
         ShowWindow(hWnd, SW_HIDE);
         break;
     case GUI::wsTimedHide:
-        result &= SetTimer(hWnd, ID_TIMER, 2000, NULL);
+        result &= SetTimer(hWnd, ID_TIMER, 3000, NULL);
         break;
     default:
         break;

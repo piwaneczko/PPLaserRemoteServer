@@ -185,7 +185,8 @@ void BluetoothServer::ListenThread()
         return;
     }
 
-    uint8_t recv_buff[RECV_BUFF_MAX_LEN] = { 0 };
+    uint16_t offs = 0, len = 0, dlen = 0;
+    uint8_t buff[RECV_BUFF_MAX_LEN] = { 0 };
     int recvResult = 0;
     clientSocket = INVALID_SOCKET;
     SOCKADDR_BTH clientAddr = { 0 };
@@ -218,7 +219,10 @@ void BluetoothServer::ListenThread()
         gui.Connected(this);
 
         while (listenThreadIsRunning) {
-            recvResult = recv(clientSocket, (char *)recv_buff, RECV_BUFF_MAX_LEN, 0);
+            offs = 0;
+            if (len >= RECV_BUFF_MAX_LEN)
+                len = 0;
+            recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
 
             if (recvResult == 0) {  // socket connection has been closed gracefully
                 gui.SetText(IDC_BTH_SERVER_STATUS, L"Device connection was lost!");
@@ -229,8 +233,32 @@ void BluetoothServer::ListenThread()
                 break; // Break out of the for loop
             }
             else {
-                //odebrano dane
-                gui.ProcRecvData(this, recv_buff, (uint16_t)recvResult);
+                len += recvResult;
+                //odebrano dane - dzielenie przetwarzanie
+                while (len >= 4) {
+                    switch (buff[offs])
+                    {
+                    case msg_type_gesture:
+                    case msg_type_gyro:
+                        dlen = 11;
+                        break;
+                    case msg_type_key:
+                    case msg_type_laser:
+                    default:
+                        dlen = 4;
+                        break;
+                    }
+
+                    if ((offs + dlen) > len)
+                        break;
+
+                    gui.ProcRecvData(this, &buff[offs], dlen);
+                    offs += dlen;
+                    len -= dlen;
+                }
+                if (len > 0) {
+                    memcpy(&buff[0], &buff[offs], len);
+                }
             }
         }
         gui.Disconnected(this);

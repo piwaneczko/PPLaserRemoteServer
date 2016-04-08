@@ -75,7 +75,7 @@ void TCPServer::ListenThread()
         return;
     }
 
-    uint16_t port = 5555;
+    uint16_t port = 5727;
     while (!CheckPortTCP(port)) port++;
 
     listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -117,7 +117,7 @@ void TCPServer::ListenThread()
     while (phe->h_addr_list[i] != NULL) {
         memcpy(&server_addr, phe->h_addr_list[i++], sizeof(in_addr));
         if (!server_ip.empty()) server_ip += "\n";
-        server_ip += inet_ntoa(server_addr) + string(port != 5555 ? ":" + to_string(port) : "");
+        server_ip += inet_ntoa(server_addr) + (":" + to_string(port));
     }
     gui.SetText(IDC_TCP_SERVER_IP, wstring(server_ip.begin(), server_ip.end()));
 
@@ -129,10 +129,8 @@ void TCPServer::ListenThread()
         return;
     }
 
-    uint8_t procData[RECV_BUFF_MAX_LEN] = { 0 };
-    uint16_t clen = 0, len = 0;
-    clock_t timeCounter = 0;
-    uint8_t recv_buff[RECV_BUFF_MAX_LEN] = { 0 };
+    uint16_t offs = 0, len = 0, dlen = 0;
+    uint8_t buff[RECV_BUFF_MAX_LEN] = { 0 };
     int recvResult = 0;
     clientSocket = INVALID_SOCKET;
     sockaddr_in clientAddr = { 0 };
@@ -165,7 +163,10 @@ void TCPServer::ListenThread()
         gui.SetText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
         gui.Connected(this);
         while (listenThreadIsRunning) {
-            recvResult = recv(clientSocket, (char *)recv_buff, RECV_BUFF_MAX_LEN, 0);
+            offs = 0;
+            if (len >= RECV_BUFF_MAX_LEN)
+                len = 0;
+            recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
             if (recvResult == 0) {  // socket connection has been closed gracefully
                 gui.SetText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
                 break; // Break out of the for loop
@@ -175,30 +176,31 @@ void TCPServer::ListenThread()
                 break; // Break out of the for loop
             }
             else {
+                len += recvResult;
                 //odebrano dane - dzielenie przetwarzanie
-                for (i = 0; i < recvResult; i++)
-                {
-                    procData[clen++] = recv_buff[i];
-                    if (clen == 1) {
-                        switch (procData[0])
-                        {
-                        case msg_type_gesture:
-                        case msg_type_gyro:
-                            len = 11;
-                            break;
-                        case msg_type_key:
-                        case msg_type_laser:
-                        default:
-                            len = 4;
-                            break;
-                        }
+                while (len >= 4) {
+                    switch (buff[offs])
+                    {
+                    case msg_type_gesture:
+                    case msg_type_gyro:
+                        dlen = 11;
+                        break;
+                    case msg_type_key:
+                    case msg_type_laser:
+                    default:
+                        dlen = 4;
+                        break;
                     }
-                    if (clen >= len) {
-                        gui.ProcRecvData(this, procData, len);
-                        clen = 0;
-                    }
-                    if (clen >= RECV_BUFF_MAX_LEN) //b³¹d
-                        clen = 0;
+
+                    if ((offs + dlen) > len)
+                        break;
+
+                    gui.ProcRecvData(this, &buff[offs], dlen);
+                    offs += dlen;
+                    len -= dlen;
+                }
+                if (len > 0) {
+                    memcpy(&buff[0], &buff[offs], len);
                 }
             }
         }
