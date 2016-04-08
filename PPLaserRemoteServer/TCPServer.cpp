@@ -7,10 +7,13 @@
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 #include "TCPServer.h"
+#include "XmlConfig.hpp"
 
 using namespace std;
 
 #define RECV_BUFF_MAX_LEN                 22      /**< Maksymalny rozmiar bufora odebranych danych */
+
+XmlConfigValue<uint16_t> DefaultPort("DefaultPort", 5727);
 
 bool CheckPortTCP(uint16_t dwPort)
 {
@@ -75,7 +78,7 @@ void TCPServer::ListenThread()
         return;
     }
 
-    uint16_t port = 5727;
+    uint16_t port = DefaultPort;
     while (!CheckPortTCP(port)) port++;
 
     listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
