@@ -18,6 +18,7 @@ listenThreadIsRunning(),
 serverSocket(INVALID_SOCKET),
 clientSocket(INVALID_SOCKET)
 {
+    serverType = stBluetooth;
     gui.SetText(IDC_BTH_SERVER_STATUS, L"Initialization...");
     listenThread = thread(&BluetoothServer::ListenThread, this);
 }
@@ -192,13 +193,17 @@ void BluetoothServer::ListenThread()
     SOCKADDR_BTH clientAddr = { 0 };
     int clientAddrLen = sizeof(SOCKADDR_BTH);
 
+    int numReady;
+    FD_SET fdrecv;
+    timeval timeout = { 0, 100000 }; //100ms
+
     listenThreadIsRunning = true;
     gui.SetText(IDC_BTH_CLIENT_NAME, L"None", GUI::wsTimedHide);
     while (listenThreadIsRunning) {
 
         gui.SetText(IDC_BTH_CLIENT_NAME, L"None");
         gui.SetText(IDC_BTH_SERVER_STATUS, L"Listening...");
-
+        
         clientSocket = accept(serverSocket,
             (struct sockaddr *)&clientAddr,
             &clientAddrLen);
@@ -219,50 +224,59 @@ void BluetoothServer::ListenThread()
         gui.Connected(this);
 
         while (listenThreadIsRunning) {
-            offs = 0;
-            if (len >= RECV_BUFF_MAX_LEN)
-                len = 0;
-            recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
-
-            if (recvResult == 0) {  // socket connection has been closed gracefully
-                gui.SetText(IDC_BTH_SERVER_STATUS, L"Device connection was lost!");
-                break; // Break out of the for loop
-            }
-            else if (recvResult == SOCKET_ERROR) {
+            FD_ZERO(&fdrecv);
+            FD_SET(clientSocket, &fdrecv);
+            numReady = select(0, &fdrecv, nullptr, nullptr, &timeout);
+            if (numReady < 0) {
                 gui.SetText(IDC_BTH_SERVER_STATUS, L"recv Error!", GUI::wsShow);
-                break; // Break out of the for loop
+                break;
             }
-            else {
-                len += recvResult;
-                //odebrano dane - dzielenie przetwarzanie
-                while (len >= 4) {
-                    switch (buff[offs])
-                    {
-                    case msg_type_gesture:
-                    case msg_type_gyro:
-                        dlen = 11;
-                        break;
-                    case msg_type_key:
-                    case msg_type_laser:
-                    default:
-                        dlen = 4;
-                        break;
-                    }
+            else if (numReady > 0 && FD_ISSET(clientSocket, &fdrecv) != 0) // jest cos do odczytania
+            {
+                offs = 0;
+                if (len >= RECV_BUFF_MAX_LEN)
+                    len = 0;
+                recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
 
-                    if ((offs + dlen) > len)
-                        break;
-
-                    gui.ProcRecvData(this, &buff[offs], dlen);
-                    offs += dlen;
-                    len -= dlen;
+                if (recvResult == 0) {  // socket connection has been closed gracefully
+                    gui.SetText(IDC_BTH_SERVER_STATUS, L"Device connection was lost!");
+                    break; // Break out of the for loop
                 }
-                if (len > 0) {
-                    memcpy(&buff[0], &buff[offs], len);
+                else if (recvResult == SOCKET_ERROR) {
+                    gui.SetText(IDC_BTH_SERVER_STATUS, L"recv Error!", GUI::wsShow);
+                    break; // Break out of the for loop
+                }
+                else {
+                    len += recvResult;
+                    //odebrano dane - dzielenie przetwarzanie
+                    while (len >= 4) {
+                        switch (buff[offs])
+                        {
+                        case msg_type_gesture:
+                        case msg_type_gyro:
+                            dlen = 11;
+                            break;
+                        case msg_type_button:
+                        case msg_type_laser:
+                        default:
+                            dlen = 4;
+                            break;
+                        }
+
+                        if ((offs + dlen) > len)
+                            break;
+
+                        gui.ProcRecvData(this, &buff[offs], dlen);
+                        offs += dlen;
+                        len -= dlen;
+                    }
+                    if (len > 0) {
+                        memcpy(&buff[0], &buff[offs], len);
+                    }
                 }
             }
         }
         gui.Disconnected(this);
-        Sleep(1000);
     }
     if (clientSocket != INVALID_SOCKET) {
         closesocket(clientSocket);

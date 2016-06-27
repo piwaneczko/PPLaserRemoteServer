@@ -7,6 +7,7 @@
 #include "GUI.h"
 #include <assert.h>
 #include <math.h>
+#include "XmlConfig.hpp"
 
 using namespace std;
 
@@ -34,6 +35,9 @@ enum msg_key_type_t {
 
 #define CRC_INIT		0xFFFFu
 #define CRC_VALID		0xF0B8u
+
+
+XmlConfigValue<bool> ShowNotification("ShowNotification", true);
 
 /**
  * Aktualizacja sumy kontrolnej
@@ -245,6 +249,7 @@ bool GUI::SetTrayIcon(int iconId, const wstring &info) {
             IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
             LR_DEFAULTCOLOR);
     }
+    niData.uFlags = NIF_ICON | (ShowNotification ? (NIF_TIP | NIF_INFO | NIF_MESSAGE) : 0x00    );
     // Show the notification.;
     bool result = (Shell_NotifyIcon(NIM_MODIFY, &niData) == TRUE);
     // free icon handle
@@ -277,7 +282,7 @@ bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) 
 size_t debugGoodCount = 0;
 size_t debugBadCount = 0;
 #endif
-void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
+void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
 {
     serverMutex.lock();
     if (connectedServers.size() > 0 && connectedServers.front() == server && dataLen >= 2) {
@@ -289,14 +294,14 @@ void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
             debugGoodCount++;
         else
             debugBadCount++;
-        SetText(IDC_TCP_SERVER_STATUS, L"Connected " + to_wstring(debugGoodCount) + L"/" + to_wstring(debugGoodCount + debugBadCount));
+        SetText(server->GetServerType() == stTCP ? IDC_TCP_SERVER_STATUS : IDC_BTH_SERVER_STATUS, L"Connected " + to_wstring(debugGoodCount) + L"/" + to_wstring(debugGoodCount + debugBadCount));
 #endif
         if (crc == CRC_VALID) {
             clock_t eventReceived = clock();
             //przetwarzanie danych tylko z pierwszego serwera
             switch (data[0])
             {
-            case msg_type_key:
+            case msg_type_button:
                 switch (data[1])
                 {
                 case msg_key_type_esc:
@@ -403,13 +408,15 @@ void GUI::ProcRecvData(const Serwer *server, uint8_t *data, uint16_t dataLen)
                     mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
                 }
                 break;
+            case msg_type_buttonboard:
+                break;
             }
             lastEventReceived = eventReceived;
         }
     }
     serverMutex.unlock();
 }
-void GUI::Connected(const Serwer *server)
+void GUI::Connected(const Server *server)
 {
     serverMutex.lock();
     if (connectedServers.size() == 0) {
@@ -420,7 +427,7 @@ void GUI::Connected(const Serwer *server)
     }
     serverMutex.unlock();
 }
-void GUI::Disconnected(const Serwer *server)
+void GUI::Disconnected(const Server *server)
 {
     serverMutex.lock();
     auto server_it = find(connectedServers.begin(), connectedServers.end(), server);

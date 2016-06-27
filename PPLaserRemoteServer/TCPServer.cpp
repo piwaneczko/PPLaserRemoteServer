@@ -13,7 +13,7 @@ using namespace std;
 
 #define RECV_BUFF_MAX_LEN                 22      /**< Maksymalny rozmiar bufora odebranych danych */
 
-XmlConfigValue<uint16_t> DefaultPort("DefaultPort", 5727);
+XmlConfigValue<uint16_t> DefaultPort("TcpDefaultPort", 5727);
 
 bool CheckPortTCP(uint16_t dwPort)
 {
@@ -53,6 +53,7 @@ listenThreadIsRunning(),
 listenSocket(INVALID_SOCKET),
 clientSocket(INVALID_SOCKET)
 {
+    serverType = stTCP;
     gui.SetText(IDC_TCP_SERVER_STATUS, L"Initialization...");
     listenThread = thread(&TCPServer::ListenThread, this);
 }
@@ -139,6 +140,10 @@ void TCPServer::ListenThread()
     sockaddr_in clientAddr = { 0 };
     int clientAddrLen = sizeof(sockaddr_in);
 
+    int numReady;
+    FD_SET fdrecv;
+    timeval timeout = { 0, 100000 }; //100ms
+
     listenThreadIsRunning = true;
     gui.SetText(IDC_TCP_CLIENT_IP, L"None", GUI::wsTimedHide);
     while (listenThreadIsRunning) {
@@ -166,50 +171,59 @@ void TCPServer::ListenThread()
         gui.SetText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
         gui.Connected(this);
         while (listenThreadIsRunning) {
-            offs = 0;
-            if (len >= RECV_BUFF_MAX_LEN)
-                len = 0;
-            recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
-            if (recvResult == 0) {  // socket connection has been closed gracefully
-                gui.SetText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
-                break; // Break out of the for loop
-            }
-            else if (recvResult == SOCKET_ERROR) {
+            FD_ZERO(&fdrecv);
+            FD_SET(clientSocket, &fdrecv);
+            numReady = select(0, &fdrecv, nullptr, nullptr, &timeout);
+            if (numReady < 0) {
                 gui.SetText(IDC_TCP_SERVER_STATUS, L"recv Error!", GUI::wsShow);
-                break; // Break out of the for loop
+                break;
             }
-            else {
-                len += recvResult;
-                //odebrano dane - dzielenie przetwarzanie
-                while (len >= 4) {
-                    switch (buff[offs])
-                    {
-                    case msg_type_gesture:
-                    case msg_type_gyro:
-                        dlen = 11;
-                        break;
-                    case msg_type_key:
-                    case msg_type_laser:
-                    default:
-                        dlen = 4;
-                        break;
-                    }
-
-                    if ((offs + dlen) > len)
-                        break;
-
-                    gui.ProcRecvData(this, &buff[offs], dlen);
-                    offs += dlen;
-                    len -= dlen;
+            else if (numReady > 0 && FD_ISSET(clientSocket, &fdrecv) != 0) // jest cos do odczytania
+            {
+                offs = 0;
+                if (len >= RECV_BUFF_MAX_LEN)
+                    len = 0;
+                recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
+                if (recvResult == 0) {  // socket connection has been closed gracefully
+                    gui.SetText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
+                    break; // Break out of the for loop
                 }
-                if (len > 0) {
-                    memcpy(&buff[0], &buff[offs], len);
+                else if (recvResult == SOCKET_ERROR) {
+                    gui.SetText(IDC_TCP_SERVER_STATUS, L"recv Error!", GUI::wsShow);
+                    break; // Break out of the for loop
+                }
+                else {
+                    len += recvResult;
+                    //odebrano dane - dzielenie przetwarzanie
+                    while (len >= 4) {
+                        switch (buff[offs])
+                        {
+                        case msg_type_gesture:
+                        case msg_type_gyro:
+                            dlen = 11;
+                            break;
+                        case msg_type_button:
+                        case msg_type_laser:
+                        default:
+                            dlen = 4;
+                            break;
+                        }
+
+                        if ((offs + dlen) > len)
+                            break;
+
+                        gui.ProcRecvData(this, &buff[offs], dlen);
+                        offs += dlen;
+                        len -= dlen;
+                    }
+                    if (len > 0) {
+                        memcpy(&buff[0], &buff[offs], len);
+                    }
                 }
             }
         }
 
         gui.Disconnected(this);
-        Sleep(1000);
     }
     if (INVALID_SOCKET != clientSocket) {
         closesocket(clientSocket);

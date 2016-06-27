@@ -26,17 +26,35 @@ static const GUID guidServiceClass =
 
 /* Lista wyliczeniowa typu komunikatów */
 enum msg_type_t {
-    msg_type_key = 0,               /**< Klawisz     */
+    msg_type_button = 0,            /**< Przycisk    */
     msg_type_laser = 1,             /**< Laser       */
     msg_type_gesture = 2,           /**< Gest myszk¹ */
-    msg_type_gyro = 3               /**< ¯yroskop    */
+    msg_type_gyro = 3,              /**< ¯yroskop    */
+    msg_type_buttonboard = 4           /**< Klawisz     */
+};
+
+enum server_type_en {
+    stUnspecified,
+    stBluetooth,
+    stTCP
 };
 
 /**
  * Klasa abstarackyjna serwera
  */
-
-class Serwer {};
+class Server {
+protected:
+    server_type_en serverType = stUnspecified;
+public:
+    /**
+     * Pobranie pola serverType
+     * \return Pole serverType
+     */
+    server_type_en GetServerType() const
+    {
+        return this->serverType;
+    }
+};
 
 /* Struktura prostok¹tu monitora */
 struct ScrrenRect {
@@ -50,7 +68,7 @@ class GUI {
 private:
     clock_t lastEventReceived;
     int zoomCount;
-    deque<const Serwer *> connectedServers;
+    deque<const Server *> connectedServers;
     deque<ScrrenRect> screens;
     mutex serverMutex;
     HWND hWnd;
@@ -101,17 +119,17 @@ public:
      * \param[in] data WskaŸnik na bufor odebranych danych
      * \param[in] dataLen D³ugoœæ danych
      */
-    void ProcRecvData(const Serwer *server, uint8_t *buff, uint16_t dataLen);
+    void ProcRecvData(const Server *server, uint8_t *buff, uint16_t dataLen);
     /**
      * Po³¹czenie klienta do serwera
      * \param[in] server WskaŸnik na serwer, do którego po³¹czy³ siê klient
      */
-    void Connected(const Serwer *server);
+    void Connected(const Server *server);
     /**
      * Roz³¹czenie klienta z serwera
      * \param[in] server WskaŸnik na serwer, z którego ro³¹czy³ siê klient
      */
-    void Disconnected(const Serwer *server);
+    void Disconnected(const Server *server);
 };
 
 #endif /* IG_GUI_H */

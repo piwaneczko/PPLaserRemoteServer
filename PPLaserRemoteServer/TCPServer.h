@@ -14,7 +14,7 @@
 /**
  * Klasa serwera TCP/IP
  */
-class TCPServer : public Serwer
+class TCPServer : public Server
 {
 private:
     GUI &gui;

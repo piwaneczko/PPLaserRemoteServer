@@ -14,7 +14,7 @@
 /**
  * Klasa serwera Bluetooth
  */
-class BluetoothServer : public Serwer
+class BluetoothServer : public Server
 {
 private:
     GUI &gui;
