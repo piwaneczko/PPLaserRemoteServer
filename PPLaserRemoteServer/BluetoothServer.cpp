@@ -195,7 +195,7 @@ void BluetoothServer::ListenThread()
 
     int numReady;
     FD_SET fdrecv;
-    timeval timeout = { 0, 100000 }; //100ms
+    timeval timeout = { 0, 40000 }; //40ms
 
     listenThreadIsRunning = true;
     gui.SetText(IDC_BTH_CLIENT_NAME, L"None", GUI::wsTimedHide);

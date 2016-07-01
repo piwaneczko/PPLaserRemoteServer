@@ -142,7 +142,7 @@ void TCPServer::ListenThread()
 
     int numReady;
     FD_SET fdrecv;
-    timeval timeout = { 0, 100000 }; //100ms
+    timeval timeout = { 0, 40000 }; //40ms
 
     listenThreadIsRunning = true;
     gui.SetText(IDC_TCP_CLIENT_IP, L"None", GUI::wsTimedHide);

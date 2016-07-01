@@ -54,7 +54,7 @@ Source: "..\glemm vs\Drivers\vcredist_x86.exe"; DestDir: {tmp}; Flags: deleteaft
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}" 
-Name: "{group}\{#MyAppName}.xml"; Filename: "{app}\{#MyAppExeName}.xml"; IconFilename: "{app}\{#MyAppExeName}.xml"   
+Name: "{group}\{#MyAppName}.xml"; Filename: "{app}\{#MyAppExeName}.xml";
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 
