@@ -72,7 +72,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_USE_MATH_DEFINES;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\XmlConfig\XmlConfigLib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\XmlConfig\XmlConfigLib\;$(SolutionDir)..\UpdateDownloader\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -91,7 +91,7 @@
       <PreprocessorDefinitions>WIN32;_USE_MATH_DEFINES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <WholeProgramOptimization>true</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\XmlConfig\XmlConfigLib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\XmlConfig\XmlConfigLib\;$(SolutionDir)..\UpdateDownloader\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -114,7 +114,7 @@
       <PreprocessorDefinitions>WIN32;_USE_MATH_DEFINES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <WholeProgramOptimization>true</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>$(SolutionDir)..\XmlConfig\XmlConfigLib\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\XmlConfig\XmlConfigLib\;$(SolutionDir)..\UpdateDownloader\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -138,6 +138,7 @@
     <Image Include="laser_icon_off.ico" />
     <Image Include="laser_icon_on.ico" />
     <Image Include="tcp.ico" />
+    <Image Include="update.ico" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BluetoothServer.h" />
@@ -149,6 +150,9 @@
     <ResourceCompile Include="Laser Remote Server.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\UpdateDownloader\UpdateDownloader.vcxproj">
+      <Project>{fb91e54d-ba03-400c-9083-bf8fa660ef76}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\..\XmlConfig\XmlConfigLib\XmlConfig.vcxproj">
       <Project>{d50635c5-ed90-4992-b1dd-1d2ce87d997c}</Project>
     </ProjectReference>

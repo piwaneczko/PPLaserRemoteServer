@@ -7,7 +7,9 @@
 #include "GUI.h"
 #include <assert.h>
 #include <math.h>
+#include <ShObjIdl.h>
 #include "XmlConfig.hpp"
+
 
 using namespace std;
 
@@ -38,6 +40,8 @@ enum msg_key_type_t {
 
 
 XmlConfigValue<bool> ShowNotification("ShowNotification", true);
+XmlConfigValue<bool> SoundNotification("SoundNotification", false);
+XmlConfigValue<bool> TempDirectory("UpdateTemporaryDirectory", true);
 
 /**
  * Aktualizacja sumy kontrolnej
@@ -115,7 +119,6 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case WM_DESTROY:
             PostQuitMessage(0);
             break;
-
         default:
             return DefWindowProc(hWnd, msg, wParam, lParam);
         }
@@ -157,7 +160,12 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMoni
     return TRUE;
 }
 
-GUI::GUI() {
+GUI::GUI() : 
+    downloader(
+        L"https://docs.google.com/uc?authuser=0&id=0B-WV4mqjX8JgSUJkN0ptWWxSMmc&export=download",
+        L"https://docs.google.com/uc?id=0B-WV4mqjX8JgQTVTcXNmWXRkaEE&export=download"),
+    actualVersion(true)
+{
     hInstance = GetModuleHandle(0);
     hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), NULL, (DLGPROC)DlgProc);
 
@@ -201,10 +209,79 @@ GUI::GUI() {
     assert(screens.size() > 0);
     lastEventReceived = 0;
     zoomCount = 1;
+    downloadThread = thread(&GUI::DownloadThread, this);
 }
 GUI::~GUI() {
     Shell_NotifyIcon(NIM_DELETE, &niData);
+    downloader.AbortDownload();
+    if (downloadThread.joinable())
+        downloadThread.join();
 }
+void ChangeUpdateGroupVisibility(HWND hWnd, bool visible) {
+    //pokazanie kontrolek aktualizacji
+    ShowWindow(GetDlgItem(hWnd, IDC_DOWNLOAD_TEXT), visible ? SW_SHOW : SW_HIDE);
+    ShowWindow(GetDlgItem(hWnd, IDC_DOWNLOAD_BAR), visible ? SW_SHOW : SW_HIDE);
+    //uktycie innych kontrolek
+    ShowWindow(GetDlgItem(hWnd, IDC_BTH_GROUP), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_BTH_ICON), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_BTH_STATUS_LABEL), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_BTH_SERVER_STATUS), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_BTH_S_LABEL), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_BTH_SERVER_NAME), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_BTH_C_LABEL), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_BTH_CLIENT_NAME), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_TCP_GROUP), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_TCP_ICON), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_TCP_STATUS_LABEL), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_TCP_SERVER_STATUS), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_TCP_SIP_LABEL), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_TCP_SERVER_IP), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_TCP_CIP_LABEL), visible ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hWnd, IDC_TCP_CLIENT_IP), visible ? SW_HIDE : SW_SHOW);
+}
+void OnUpdateProgress(float value, void *user)
+{
+    HWND &hWnd = *(HWND *)user;
+    HWND text = GetDlgItem(hWnd, IDC_DOWNLOAD_TEXT);
+    HWND bar = GetDlgItem(hWnd, IDC_DOWNLOAD_BAR);
+    if (text != NULL && bar != NULL) {
+        int intValue = value * 100;
+        SendMessage(text, WM_SETTEXT, 0, (LPARAM)(L"Downloading: " + to_wstring(intValue) + L"%").c_str());
+        SendMessage(bar, PBM_SETPOS, (WPARAM)intValue, 0);
+    }
+}
+void GUI::DownloadThread()
+{
+    wstring version = downloader.CheckVersion(UD_CHECK_BASE);
+    if (!version.empty()) {
+        if (MessageBox(NULL,
+            L"There is new version of software available to download.\nDo you want to install it now?",
+            (L"New version (" + version + L") available!").c_str(),
+            MB_YESNO | MB_ICONQUESTION) == IDYES) {
+            KillTimer(hWnd, ID_TIMER);
+            ChangeUpdateGroupVisibility(hWnd, true);
+            SetTrayIcon(IDI_UPDATE, L"Downloading started!", NIIF_INFO);
+            ShowWindow(hWnd, SW_SHOWNORMAL);
+            int result = downloader.DownloadAndUpdate(&OnUpdateProgress, (void *)&hWnd, TempDirectory);
+            switch (result)
+            {
+            case S_OK:
+                SetTrayIcon(IDI_UPDATE, L"Downloading ended!", NIIF_INFO);
+                actualVersion = false;
+                break;
+            case E_ABORT:
+                SetTrayIcon(IDI_UPDATE, L"Downloading aborted!", NIIF_INFO);
+                ChangeUpdateGroupVisibility(hWnd, false);
+                break;
+            default:
+                SetTrayIcon(IDI_UPDATE, L"Downloading error!", NIIF_ERROR);
+                ChangeUpdateGroupVisibility(hWnd, false);
+                break;
+            }
+        }
+    }
+}
+
 void GUI::ShowContextMenu(HWND hWnd)
 {
     POINT pt;
@@ -235,21 +312,23 @@ GUI& GUI::GetInstance() {
 void GUI::MainLoop() {
     // Pêtla komunikatów
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0))
+    while (actualVersion && GetMessage(&msg, NULL, 0, 0))
     {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
 }
-bool GUI::SetTrayIcon(int iconId, const wstring &info) {
+bool GUI::SetTrayIcon(int iconId, const wstring &info, int nifIconFlag) {    
     // This text will be shown as the icon's info.
     wsprintf(niData.szInfo, info.c_str());
-    if (IDI_LASER_ICON <= iconId && iconId <= IDI_TCP) {
+    if (IDI_LASER_ICON <= iconId && iconId <= IDI_UPDATE) {
         niData.hIcon = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(iconId),
             IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
             LR_DEFAULTCOLOR);
     }
-    niData.uFlags = NIF_ICON | (ShowNotification ? (NIF_TIP | NIF_INFO | NIF_MESSAGE) : 0x00    );
+    niData.uFlags = NIF_ICON | (ShowNotification ? (NIF_TIP | NIF_INFO | NIF_MESSAGE) : 0);
+    niData.dwInfoFlags = (SoundNotification ? 0 : NIIF_NOSOUND) | nifIconFlag;
+
     // Show the notification.;
     bool result = (Shell_NotifyIcon(NIM_MODIFY, &niData) == TRUE);
     // free icon handle
@@ -264,7 +343,7 @@ bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) 
     switch (windowState)
     {
     case GUI::wsShow:
-        ShowWindow(hWnd, SW_SHOW);
+        ShowWindow(hWnd, SW_SHOWDEFAULT);
         break;
     case GUI::wsHide:
         ShowWindow(hWnd, SW_HIDE);

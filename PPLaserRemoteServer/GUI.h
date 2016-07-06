@@ -13,7 +13,9 @@
 #include <string>
 #include <deque>
 #include <mutex>
+#include <thread>
 #include <Windows.h>
+#include "UpdateDownloader.hpp"
 #include "resource.h"
 
 using namespace std;
@@ -66,6 +68,12 @@ struct ScrrenRect {
  */
 class GUI {
 private:
+    //Update
+    bool actualVersion;
+    UpdateDownloader downloader;
+    thread downloadThread;
+    void DownloadThread();
+    //Server Events
     clock_t lastEventReceived;
     int zoomCount;
     deque<const Server *> connectedServers;
@@ -101,11 +109,12 @@ public:
     void MainLoop();
     /**
      * Modyfikacja obrazu oraz tekstu informacyjnego ikony w pasku systemowym
-     * \param[in] iconId Identyfikator ikony. Wartoœci od 101 do 105
-     * \param[in] info Text informacyjny, który poka¿e siê w powiadomieniu nad ikon¹ systemow¹. 
-     *                Aby nie wyœwietlaæ nale¿y ustawiæ ""
+     * \param[in] iconId     Identyfikator ikony. Wartoœci od 101 do 105
+     * \param[in] info       Text informacyjny, który poka¿e siê w powiadomieniu nad ikon¹ systemow¹. 
+     *                       Aby nie wyœwietlaæ nale¿y ustawiæ ""
+     * \param[in] iconFlag   Flaga ikony w powiadomieniu
      */
-    bool SetTrayIcon(int iconId, const wstring &info = L"");
+    bool SetTrayIcon(int iconId, const wstring &info = L"", int nifIconFlag = NIIF_NONE);
     /**
      * Ustawienie textu pola tekstowego
      * \param[in] textBoxId Identyfikator pola tekstowego. Wartoœci od 1001 do 1006

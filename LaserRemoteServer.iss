@@ -13,7 +13,10 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{9ED29082-9E7E-4678-9605-427ACC84922B}
 AppName={#MyAppName}
-AppVersion={#MyAppVersion}
+AppVersion={#MyAppVersion}            
+VersionInfoVersion={#MyAppVersion}  
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoCompany={#MyAppPublisher}
 ;AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
@@ -34,7 +37,7 @@ DisableDirPage=auto
 DisableProgramGroupPage=auto
 DisableReadyPage=true
 ;Registry key add PrivilegesRequired
-PrivilegesRequired=admin
+PrivilegesRequired=poweruser
 
 [Languages]
 Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"

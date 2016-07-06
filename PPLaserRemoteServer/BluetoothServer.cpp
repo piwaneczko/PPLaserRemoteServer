@@ -1,8 +1,8 @@
 /**
-* \brief èrÛd≥o klasy serwera Bluetooth
-* \file BluetoothServer.cpp
-* \author Pawe≥ Iwaneczko
-*/
+ * \brief èrÛd≥o klasy serwera Bluetooth
+ * \file BluetoothServer.cpp
+ * \author Pawe≥ Iwaneczko
+ */
 #include <stdio.h>
 #include <WinSock2.h>
 #include <ws2bth.h>
