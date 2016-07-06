@@ -164,7 +164,7 @@ GUI::GUI() :
     downloader(
         L"https://docs.google.com/uc?authuser=0&id=0B-WV4mqjX8JgSUJkN0ptWWxSMmc&export=download",
         L"https://docs.google.com/uc?id=0B-WV4mqjX8JgQTVTcXNmWXRkaEE&export=download"),
-    actualVersion(true)
+    hidden()
 {
     hInstance = GetModuleHandle(0);
     hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), NULL, (DLGPROC)DlgProc);
@@ -254,28 +254,31 @@ void GUI::DownloadThread()
 {
     wstring version = downloader.CheckVersion(UD_CHECK_BASE);
     if (!version.empty()) {
+        KillTimer(hWnd, ID_TIMER);
         if (MessageBox(NULL,
             L"There is new version of software available to download.\nDo you want to install it now?",
             (L"New version (" + version + L") available!").c_str(),
             MB_YESNO | MB_ICONQUESTION) == IDYES) {
-            KillTimer(hWnd, ID_TIMER);
             ChangeUpdateGroupVisibility(hWnd, true);
+            ShowWindow(hWnd, SW_SHOWDEFAULT);
+            UpdateWindow(hWnd);
             SetTrayIcon(IDI_UPDATE, L"Downloading started!", NIIF_INFO);
-            ShowWindow(hWnd, SW_SHOWNORMAL);
             int result = downloader.DownloadAndUpdate(&OnUpdateProgress, (void *)&hWnd, TempDirectory);
             switch (result)
             {
             case S_OK:
                 SetTrayIcon(IDI_UPDATE, L"Downloading ended!", NIIF_INFO);
-                actualVersion = false;
+                PostMessage(hWnd, WM_CLOSE, 0, 0);
                 break;
             case E_ABORT:
                 SetTrayIcon(IDI_UPDATE, L"Downloading aborted!", NIIF_INFO);
                 ChangeUpdateGroupVisibility(hWnd, false);
+                UpdateWindow(hWnd);
                 break;
             default:
                 SetTrayIcon(IDI_UPDATE, L"Downloading error!", NIIF_ERROR);
                 ChangeUpdateGroupVisibility(hWnd, false);
+                UpdateWindow(hWnd);
                 break;
             }
         }
@@ -312,7 +315,7 @@ GUI& GUI::GetInstance() {
 void GUI::MainLoop() {
     // Pêtla komunikatów
     MSG msg;
-    while (actualVersion && GetMessage(&msg, NULL, 0, 0))
+    while (GetMessage(&msg, NULL, 0, 0))
     {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
@@ -330,12 +333,19 @@ bool GUI::SetTrayIcon(int iconId, const wstring &info, int nifIconFlag) {
     niData.dwInfoFlags = (SoundNotification ? 0 : NIIF_NOSOUND) | nifIconFlag;
 
     // Show the notification.;
-    bool result = (Shell_NotifyIcon(NIM_MODIFY, &niData) == TRUE);
+    bool result = (Shell_NotifyIcon(hidden ? NIM_ADD : NIM_MODIFY, &niData) == TRUE);
     // free icon handle
     if (niData.hIcon && DestroyIcon(niData.hIcon))
         niData.hIcon = NULL;
 
+    hidden = !result;
+
     return result;
+}
+bool GUI::HideTrayIcon()
+{
+    hidden = (Shell_NotifyIcon(NIM_DELETE, &niData) == TRUE);
+    return hidden;
 }
 bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) {
     HWND textBox = GetDlgItem(hWnd, textBoxId);

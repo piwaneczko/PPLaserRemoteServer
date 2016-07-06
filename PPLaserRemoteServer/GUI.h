@@ -69,7 +69,6 @@ struct ScrrenRect {
 class GUI {
 private:
     //Update
-    bool actualVersion;
     UpdateDownloader downloader;
     thread downloadThread;
     void DownloadThread();
@@ -80,6 +79,7 @@ private:
     deque<ScrrenRect> screens;
     mutex serverMutex;
     HWND hWnd;
+    bool hidden;
     HINSTANCE hInstance;
     NOTIFYICONDATA niData;
     friend LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -115,6 +115,10 @@ public:
      * \param[in] iconFlag   Flaga ikony w powiadomieniu
      */
     bool SetTrayIcon(int iconId, const wstring &info = L"", int nifIconFlag = NIIF_NONE);
+    /**
+     * Ukrycie powiadomienia 
+     */
+    bool HideTrayIcon();
     /**
      * Ustawienie textu pola tekstowego
      * \param[in] textBoxId Identyfikator pola tekstowego. Wartoœci od 1001 do 1006
