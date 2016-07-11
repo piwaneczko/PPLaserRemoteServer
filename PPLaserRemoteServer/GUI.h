@@ -28,11 +28,12 @@ static const GUID guidServiceClass =
 
 /* Lista wyliczeniowa typu komunikatów */
 enum msg_type_t {
-    msg_type_button = 0,            /**< Przycisk    */
-    msg_type_laser = 1,             /**< Laser       */
-    msg_type_gesture = 2,           /**< Gest myszk¹ */
-    msg_type_gyro = 3,              /**< ¯yroskop    */
-    msg_type_buttonboard = 4           /**< Klawisz     */
+    msg_type_button = 0,            /*!< Przycisk    */
+    msg_type_laser = 1,             /*!< Laser       */
+    msg_type_gesture = 2,           /*!< Gest myszk¹ */
+    msg_type_gyro = 3,              /*!< ¯yroskop    */
+    msg_type_keyboard = 4,          /*!< Klawisz     */
+    msg_type_version = 5            /*!< Wersja      */
 };
 
 enum server_type_en {
@@ -47,15 +48,13 @@ enum server_type_en {
 class Server {
 protected:
     server_type_en serverType = stUnspecified;
+    uint16_t GetDataLen(msg_type_t type) const;
 public:
     /**
      * Pobranie pola serverType
      * \return Pole serverType
      */
-    server_type_en GetServerType() const
-    {
-        return this->serverType;
-    }
+    server_type_en GetServerType() const;
 };
 
 /* Struktura prostok¹tu monitora */

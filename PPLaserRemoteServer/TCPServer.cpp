@@ -170,6 +170,17 @@ void TCPServer::ListenThread()
         string clientIP = inet_ntoa(clientAddr.sin_addr);
         gui.SetText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
         gui.Connected(this);
+
+        //wysy³¹nie wersji softu
+        file_version_t ver;
+        if (UpdateDownloader::GetFileVersion(ver)) {
+            buff[0] = msg_type_version;
+            buff[1] = (uint8_t)((ver.major & 0xFF00) >> 8);
+            buff[2] = (uint8_t)((ver.major & 0x00FF));
+            buff[3] = (uint8_t)((ver.minor & 0xFF00) >> 8);
+            buff[4] = (uint8_t)((ver.minor & 0x00FF));
+            send(clientSocket, (const char *)buff, 5, 0);
+        }
         while (listenThreadIsRunning) {
             FD_ZERO(&fdrecv);
             FD_SET(clientSocket, &fdrecv);
@@ -196,20 +207,9 @@ void TCPServer::ListenThread()
                     len += recvResult;
                     //odebrano dane - dzielenie przetwarzanie
                     while (len >= 4) {
-                        switch (buff[offs])
-                        {
-                        case msg_type_gesture:
-                        case msg_type_gyro:
-                            dlen = 11;
-                            break;
-                        case msg_type_button:
-                        case msg_type_laser:
-                        default:
-                            dlen = 4;
-                            break;
-                        }
+                        dlen = GetDataLen((msg_type_t)buff[offs]);
 
-                        if ((offs + dlen) > len)
+                        if (dlen > len)
                             break;
 
                         gui.ProcRecvData(this, &buff[offs], dlen);

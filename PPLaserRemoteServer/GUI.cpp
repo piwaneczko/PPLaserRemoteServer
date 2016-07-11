@@ -42,6 +42,8 @@ enum msg_key_type_t {
 XmlConfigValue<bool> ShowNotification("ShowNotification", true);
 XmlConfigValue<bool> SoundNotification("SoundNotification", false);
 XmlConfigValue<bool> TempDirectory("UpdateTemporaryDirectory", true);
+XmlConfigValue<uint32_t> AutoHide("Autohide time (milliseconds)", 3000);
+
 
 /**
  * Aktualizacja sumy kontrolnej
@@ -359,7 +361,8 @@ bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) 
         ShowWindow(hWnd, SW_HIDE);
         break;
     case GUI::wsTimedHide:
-        result &= SetTimer(hWnd, ID_TIMER, 3000, NULL);
+        if(AutoHide > 0u)
+            result &= SetTimer(hWnd, ID_TIMER, AutoHide, NULL);
         break;
     default:
         break;
@@ -367,10 +370,22 @@ bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) 
     result &= SendMessage(textBox, WM_SETTEXT, 0, (LPARAM)text.c_str());
     return (result == TRUE);
 }
+string ws2s(const wstring& ws)
+{
+    int size_needed = WideCharToMultiByte(CP_ACP, 0, ws.c_str(), (int)ws.size(), NULL, 0, NULL, NULL);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_ACP, 0, ws.c_str(), (int)ws.size(), &strTo[0], size_needed, NULL, NULL);
+    return strTo;
+}
+
 #if _DEBUG
 size_t debugGoodCount = 0;
 size_t debugBadCount = 0;
 #endif
+void keybd_event(uint8_t keyCode) {
+    keybd_event(keyCode, MapVirtualKey(keyCode, MAPVK_VK_TO_VSC), 0, 0);
+    keybd_event(keyCode, MapVirtualKey(keyCode, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+}
 void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
 {
     serverMutex.lock();
@@ -394,26 +409,21 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                 switch (data[1])
                 {
                 case msg_key_type_esc:
-                    keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_ESCAPE);
                     break;
                 case msg_key_type_f5:
-                    keybd_event(VK_F5, MapVirtualKey(VK_F5, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_F5, MapVirtualKey(VK_F5, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_F5);
                     break;
                 case msg_key_type_shf5:
                     keybd_event(VK_LSHIFT, MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_F5, MapVirtualKey(VK_F5, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_F5, MapVirtualKey(VK_F5, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_F5);
                     keybd_event(VK_LSHIFT, MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
                     break;
                 case msg_key_type_prev:
-                    keybd_event(VK_LEFT, MapVirtualKey(VK_LEFT, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_LEFT, MapVirtualKey(VK_LEFT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_LEFT);
                     break;
                 case msg_key_type_next:
-                    keybd_event(VK_RIGHT, MapVirtualKey(VK_RIGHT, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_RIGHT, MapVirtualKey(VK_RIGHT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_RIGHT);
                     break;
                 case msg_key_type_left_down:
                     mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
@@ -428,17 +438,14 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                     mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
                     break;
                 case msg_key_type_volume_down:
-                    keybd_event(VK_VOLUME_DOWN, MapVirtualKey(VK_VOLUME_DOWN, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_VOLUME_DOWN, MapVirtualKey(VK_VOLUME_DOWN, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_VOLUME_DOWN);
                     break;
                 case msg_key_type_volume_up:
-                    keybd_event(VK_VOLUME_UP, MapVirtualKey(VK_VOLUME_UP, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_VOLUME_UP, MapVirtualKey(VK_VOLUME_UP, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_VOLUME_UP);
                     break;
                 case msg_key_type_zoom_in:
                     keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_ADD, MapVirtualKey(VK_ADD, MAPVK_VK_TO_VSC), 0, 0);
-                    keybd_event(VK_ADD, MapVirtualKey(VK_ADD, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_ADD);
                     keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
                     zoomCount++;
                     break;
@@ -447,12 +454,10 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                     if (zoomCount > 1)
                         zoomCount--;
                     if (zoomCount > 1) {
-                        keybd_event(VK_SUBTRACT, MapVirtualKey(VK_SUBTRACT, MAPVK_VK_TO_VSC), 0, 0);
-                        keybd_event(VK_SUBTRACT, MapVirtualKey(VK_SUBTRACT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                        keybd_event(VK_SUBTRACT);
                     }
                     else {
-                        keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC), 0, 0);
-                        keybd_event(VK_ESCAPE, MapVirtualKey(VK_ESCAPE, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                        keybd_event(VK_ESCAPE);
                     }
                     keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
                     break;
@@ -497,7 +502,39 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                     mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
                 }
                 break;
-            case msg_type_buttonboard:
+            case msg_type_keyboard:
+                if (dataLen == 5) {
+                    wchar_t keyCode = 0;
+                    memcpy(&keyCode, &data[1], sizeof(wchar_t));
+                    uint8_t byteKeyCode = (uint8_t)VkKeyScan(keyCode);
+                    switch (byteKeyCode)
+                    {
+                    case VK_BACK: case VK_TAB: case VK_CLEAR: case VK_RETURN:
+                    case VK_SHIFT: case VK_CONTROL: case VK_MENU: case VK_PAUSE: case VK_CAPITAL:
+                    case VK_HANGUL: case VK_JUNJA: case VK_FINAL: case VK_HANJA:
+                    case VK_ESCAPE: case VK_SPACE: case VK_PRIOR: case VK_NEXT: case VK_END: case VK_HOME: 
+                    case VK_LEFT: case VK_UP: case VK_RIGHT: case VK_DOWN:
+                    case VK_SELECT: case VK_PRINT: case VK_EXECUTE: case VK_SNAPSHOT:
+                    case VK_INSERT: case VK_DELETE: case VK_HELP:
+                    case VK_LWIN: case VK_RWIN: case VK_APPS: case VK_SLEEP:
+                    case VK_F1: case VK_F2: case VK_F3: case VK_F4: case VK_F5: case VK_F6:
+                    case VK_F7: case VK_F8: case VK_F9: case VK_F10: case VK_F11: case VK_F12:
+                    case VK_F13: case VK_F14: case VK_F15: case VK_F16: case VK_F17: case VK_F18:
+                    case VK_F19: case VK_F20: case VK_F21: case VK_F22: case VK_F23: case VK_F24:
+                        keybd_event(byteKeyCode);
+                        break;
+                    default: {
+                        INPUT ip;
+                        ip.type = INPUT_KEYBOARD;
+                        ip.ki.time = 0;
+                        ip.ki.dwFlags = KEYEVENTF_UNICODE; // Specify the key as a unicode character
+                        ip.ki.wScan = keyCode; // Which keypress to simulate
+                        ip.ki.wVk = 0;
+                        ip.ki.dwExtraInfo = 0;
+                        SendInput(1, &ip, sizeof(INPUT));
+                    } break;
+                    }
+                }
                 break;
             }
             lastEventReceived = eventReceived;
@@ -527,4 +564,30 @@ void GUI::Disconnected(const Server *server)
         SetTrayIcon(IDI_LASER_ICON, L"Remote client disconnected!");
     }
     serverMutex.unlock();
+}
+
+uint16_t Server::GetDataLen(msg_type_t type) const
+{
+    uint16_t dlen = 0;
+    switch (type)
+    {
+    case msg_type_gesture:
+    case msg_type_gyro:
+        dlen = 11;
+        break;
+    case msg_type_keyboard:
+        dlen = 5;
+        break;
+    case msg_type_button:
+    case msg_type_laser:
+    default:
+        dlen = 4;
+        break;
+    }
+    return dlen;
+}
+
+server_type_en Server::GetServerType() const
+{
+    return this->serverType;
 }
