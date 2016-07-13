@@ -35,7 +35,8 @@ Compression=lzma
 SolidCompression=yes
 DisableDirPage=auto      
 DisableProgramGroupPage=auto
-DisableReadyPage=true
+DisableReadyPage=true                  
+SignTool=silsense
 ;Registry key add PrivilegesRequired
 PrivilegesRequired=poweruser
 
@@ -52,7 +53,7 @@ Name: {app}; Permissions: users-full
 [Files]           
 Source: "Release\{#MyAppExeName}"; DestDir: "{app}"    
 Source: "Release\{#MyAppExeName}.xml"; DestDir: "{app}" 
-Source: "..\glemm vs\Drivers\vcredist_x86.exe"; DestDir: {tmp}; Flags: deleteafterinstall
+Source: "..\glemm vs\Drivers\vcredist_x86.exe"; DestDir: {tmp}; Flags: deleteafterinstall   
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
