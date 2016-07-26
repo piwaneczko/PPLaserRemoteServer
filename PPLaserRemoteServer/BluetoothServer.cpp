@@ -165,7 +165,7 @@ void BluetoothServer::ListenThread()
     wsaQuerySet.lpServiceClassId = (LPGUID)&guidServiceClass;
 
     wsaQuerySet.lpszServiceInstanceName = (LPWSTR)(wstring(szThisComputerName) + L" " + REMOTE_SERVER_INSTANCE_STRING).c_str();
-    wsaQuerySet.lpszComment = L"PowerPoint Laser Remote Server";
+    wsaQuerySet.lpszComment = L"PP Laser Remote Server";
     wsaQuerySet.dwNameSpace = NS_BTH;
     wsaQuerySet.dwNumberOfCsAddrs = 1;      // Must be 1.
     wsaQuerySet.lpcsaBuffer = &clientSocketAddrInfo;  // Req'd.

@@ -194,7 +194,7 @@ GUI::GUI() :
     niData.uCallbackMessage = SWM_TRAYMSG;
 
     // This text will be shown as the icon's tip.
-    wsprintf(niData.szTip, L"PowerPoint Remote Server");
+    wsprintf(niData.szTip, L"PP Remote Server");
 
     // Show the notification.
     Shell_NotifyIcon(NIM_ADD, &niData);
