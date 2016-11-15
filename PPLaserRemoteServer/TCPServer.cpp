@@ -105,26 +105,6 @@ void TCPServer::ListenThread()
         return;
     }
 
-    char ac[80];
-    hostent *phe = NULL;
-    if (gethostname(ac, sizeof(ac)) == SOCKET_ERROR || 
-        (phe = gethostbyname(ac)) == NULL){
-        gui.SetText(IDC_TCP_SERVER_STATUS, L"gethostname Error!");
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
-        listenThread.detach();
-        return;
-    }
-    string server_ip = "";
-    in_addr server_addr = { 0 };
-    int i = 0;
-    while (phe->h_addr_list[i] != NULL) {
-        memcpy(&server_addr, phe->h_addr_list[i++], sizeof(in_addr));
-        if (!server_ip.empty()) server_ip += "\n";
-        server_ip += inet_ntoa(server_addr) + (":" + to_string(port));
-    }
-    gui.SetText(IDC_TCP_SERVER_IP, wstring(server_ip.begin(), server_ip.end()));
-
     if (SOCKET_ERROR == listen(listenSocket, DEFAULT_LISTEN_BACKLOG)) {
         gui.SetText(IDC_TCP_SERVER_STATUS, L"listen Error!", GUI::wsShow);
         closesocket(listenSocket);
@@ -141,89 +121,95 @@ void TCPServer::ListenThread()
     int clientAddrLen = sizeof(sockaddr_in);
 
     int numReady;
-    FD_SET fdrecv;
+    FD_SET fdrecv, ldrecv;
     timeval timeout = { 0, 40000 }; //40ms
+    timeval ltimeout = { 0, 200000 }; //100ms
 
     listenThreadIsRunning = true;
     gui.SetText(IDC_TCP_CLIENT_IP, L"None", GUI::wsTimedHide);
     while (listenThreadIsRunning) {
 
+        SetServerIPs(port);
         gui.SetText(IDC_TCP_CLIENT_IP, L"None");
         gui.SetText(IDC_TCP_SERVER_STATUS, L"Listening...");
 
-        clientSocket = accept(listenSocket,
-            (struct sockaddr *)&clientAddr,
-            &clientAddrLen);
-        if (INVALID_SOCKET == clientSocket) {
-            if (listenThreadIsRunning) {
-                gui.SetText(IDC_TCP_SERVER_STATUS, L"accept Error!", GUI::wsShow);
-                closesocket(listenSocket);
-                listenSocket = INVALID_SOCKET;
-            }
-            else {
-                gui.SetText(IDC_TCP_SERVER_STATUS, L"Ending listening", GUI::wsShow);
-            }
-            break; // Break out of the for loop
-        }
-
-        gui.SetText(IDC_TCP_SERVER_STATUS, L"Connected");
-        string clientIP = inet_ntoa(clientAddr.sin_addr);
-        gui.SetText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
-        gui.Connected(this);
-
-        //wysy³¹nie wersji softu
-        file_version_t ver;
-        if (UpdateDownloader::GetFileVersion(ver)) {
-            buff[0] = msg_type_version;
-            buff[1] = (uint8_t)((ver.major & 0xFF00) >> 8);
-            buff[2] = (uint8_t)((ver.major & 0x00FF));
-            buff[3] = (uint8_t)((ver.minor & 0xFF00) >> 8);
-            buff[4] = (uint8_t)((ver.minor & 0x00FF));
-            send(clientSocket, (const char *)buff, 5, 0);
-        }
-        while (listenThreadIsRunning) {
-            FD_ZERO(&fdrecv);
-            FD_SET(clientSocket, &fdrecv);
-            numReady = select(0, &fdrecv, nullptr, nullptr, &timeout);
-            if (numReady < 0) {
-                gui.SetText(IDC_TCP_SERVER_STATUS, L"recv Error!", GUI::wsShow);
-                break;
-            }
-            else if (numReady > 0 && FD_ISSET(clientSocket, &fdrecv) != 0) // jest cos do odczytania
-            {
-                offs = 0;
-                if (len >= RECV_BUFF_MAX_LEN)
-                    len = 0;
-                recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
-                if (recvResult == 0) {  // socket connection has been closed gracefully
-                    gui.SetText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
-                    break; // Break out of the for loop
-                }
-                else if (recvResult == SOCKET_ERROR) {
-                    gui.SetText(IDC_TCP_SERVER_STATUS, L"recv Error!", GUI::wsShow);
-                    break; // Break out of the for loop
+        FD_ZERO(&ldrecv);
+        FD_SET(listenSocket, &ldrecv);
+        numReady = select(0, &ldrecv, nullptr, nullptr, &ltimeout);
+        if (numReady > 0) {
+            clientSocket = accept(listenSocket,
+                (struct sockaddr *)&clientAddr,
+                &clientAddrLen);
+            if (INVALID_SOCKET == clientSocket) {
+                if (listenThreadIsRunning) {
+                    gui.SetText(IDC_TCP_SERVER_STATUS, L"accept Error!", GUI::wsShow);
+                    closesocket(listenSocket);
+                    listenSocket = INVALID_SOCKET;
                 }
                 else {
-                    len += recvResult;
-                    //odebrano dane - dzielenie przetwarzanie
-                    while (len >= 4) {
-                        dlen = GetDataLen((msg_type_t)buff[offs]);
+                    gui.SetText(IDC_TCP_SERVER_STATUS, L"Ending listening", GUI::wsShow);
+                }
+                break; // Break out of the for loop
+            }
 
-                        if (dlen > len)
-                            break;
+            gui.SetText(IDC_TCP_SERVER_STATUS, L"Connected");
+            string clientIP = inet_ntoa(clientAddr.sin_addr);
+            gui.SetText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
+            gui.Connected(this);
 
-                        gui.ProcRecvData(this, &buff[offs], dlen);
-                        offs += dlen;
-                        len -= dlen;
+            //wysy³¹nie wersji softu
+            file_version_t ver;
+            if (UpdateDownloader::GetFileVersion(ver)) {
+                buff[0] = msg_type_version;
+                buff[1] = (uint8_t)((ver.major & 0xFF00) >> 8);
+                buff[2] = (uint8_t)((ver.major & 0x00FF));
+                buff[3] = (uint8_t)((ver.minor & 0xFF00) >> 8);
+                buff[4] = (uint8_t)((ver.minor & 0x00FF));
+                send(clientSocket, (const char *)buff, 5, 0);
+            }
+            while (listenThreadIsRunning) {
+                FD_ZERO(&fdrecv);
+                FD_SET(clientSocket, &fdrecv);
+                numReady = select(0, &fdrecv, nullptr, nullptr, &timeout);
+                if (numReady < 0) {
+                    gui.SetText(IDC_TCP_SERVER_STATUS, L"recv Error!", GUI::wsShow);
+                    break;
+                }
+                else if (numReady > 0 && FD_ISSET(clientSocket, &fdrecv) != 0) // jest cos do odczytania
+                {
+                    offs = 0;
+                    if (len >= RECV_BUFF_MAX_LEN)
+                        len = 0;
+                    recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
+                    if (recvResult == 0) {  // socket connection has been closed gracefully
+                        gui.SetText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
+                        break; // Break out of the for loop
                     }
-                    if (len > 0) {
-                        memcpy(&buff[0], &buff[offs], len);
+                    else if (recvResult == SOCKET_ERROR) {
+                        gui.SetText(IDC_TCP_SERVER_STATUS, L"recv Error!", GUI::wsShow);
+                        break; // Break out of the for loop
+                    }
+                    else {
+                        len += recvResult;
+                        //odebrano dane - dzielenie przetwarzanie
+                        while (len >= 4) {
+                            dlen = GetDataLen((msg_type_t)buff[offs]);
+
+                            if (dlen > len)
+                                break;
+
+                            gui.ProcRecvData(this, &buff[offs], dlen);
+                            offs += dlen;
+                            len -= dlen;
+                        }
+                        if (len > 0) {
+                            memcpy(&buff[0], &buff[offs], len);
+                        }
                     }
                 }
             }
+            gui.Disconnected(this);
         }
-
-        gui.Disconnected(this);
     }
     if (INVALID_SOCKET != clientSocket) {
         closesocket(clientSocket);
@@ -235,4 +221,27 @@ void TCPServer::ListenThread()
         listenSocket = INVALID_SOCKET;
     }
     listenThreadIsRunning = false;
+}
+
+void TCPServer::SetServerIPs(uint16_t port)
+{
+    char ac[80];
+    hostent *phe = NULL;
+    if (gethostname(ac, sizeof(ac)) == SOCKET_ERROR ||
+        (phe = gethostbyname(ac)) == NULL) {
+        gui.SetText(IDC_TCP_SERVER_STATUS, L"gethostname Error!");
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
+        listenThread.detach();
+        return;
+    }
+    string server_ip = "";
+    in_addr server_addr = { 0 };
+    int i = 0;
+    while (phe->h_addr_list[i] != NULL) {
+        memcpy(&server_addr, phe->h_addr_list[i++], sizeof(in_addr));
+        if (!server_ip.empty()) server_ip += "\n";
+        server_ip += inet_ntoa(server_addr) + (":" + to_string(port));
+    }
+    gui.SetText(IDC_TCP_SERVER_IP, wstring(server_ip.begin(), server_ip.end()));
 }

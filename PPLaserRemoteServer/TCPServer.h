@@ -22,6 +22,7 @@ private:
     uint32_t listenSocket, clientSocket;
     bool listenThreadIsRunning;
     void ListenThread();
+    void SetServerIPs(uint16_t port);
 public:
     /**
      * Konstruktor klasy serwera TCP/IP

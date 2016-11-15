@@ -36,7 +36,7 @@ SolidCompression=yes
 DisableDirPage=auto      
 DisableProgramGroupPage=auto
 DisableReadyPage=true                  
-SignTool=silsense
+;SignTool=silsense
 ;Registry key add PrivilegesRequired
 PrivilegesRequired=poweruser
 
