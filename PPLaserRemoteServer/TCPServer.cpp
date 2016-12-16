@@ -13,7 +13,7 @@ using namespace std;
 
 #define RECV_BUFF_MAX_LEN                 22      /**< Maksymalny rozmiar bufora odebranych danych */
 
-XmlConfigValue<uint16_t> DefaultPort("TcpDefaultPort", 5727);
+XmlConfigValue<uint16_t> DefaultPort("TcpDefaultPort", 3389);
 
 bool CheckPortTCP(uint16_t dwPort)
 {
@@ -105,7 +105,7 @@ void TCPServer::ListenThread()
         return;
     }
 
-    if (SOCKET_ERROR == listen(listenSocket, DEFAULT_LISTEN_BACKLOG)) {
+    if (SOCKET_ERROR == listen(listenSocket, SOMAXCONN)) {
         gui.SetText(IDC_TCP_SERVER_STATUS, L"listen Error!", GUI::wsShow);
         closesocket(listenSocket);
         listenSocket = INVALID_SOCKET;
@@ -121,22 +121,24 @@ void TCPServer::ListenThread()
     int clientAddrLen = sizeof(sockaddr_in);
 
     int numReady;
-    FD_SET fdrecv, ldrecv;
-    timeval timeout = { 0, 40000 }; //40ms
-    timeval ltimeout = { 0, 200000 }; //100ms
+    FD_SET fdrecv, listenfd;
+    timeval timeout =       { 0,  10000 }; // 10ms
+    timeval listenTimeout = { 0, 200000 }; //200Ms
 
     listenThreadIsRunning = true;
     gui.SetText(IDC_TCP_CLIENT_IP, L"None", GUI::wsTimedHide);
     while (listenThreadIsRunning) {
-
         SetServerIPs(port);
         gui.SetText(IDC_TCP_CLIENT_IP, L"None");
         gui.SetText(IDC_TCP_SERVER_STATUS, L"Listening...");
 
-        FD_ZERO(&ldrecv);
-        FD_SET(listenSocket, &ldrecv);
-        numReady = select(0, &ldrecv, nullptr, nullptr, &ltimeout);
-        if (numReady > 0) {
+        FD_ZERO(&listenfd);
+        FD_SET(listenSocket, &listenfd);
+        numReady = select(0, &listenfd, NULL, NULL, &listenTimeout);
+        if (FD_ISSET(listenSocket, &listenfd) && numReady) {
+            clientAddr = { 0 };
+            clientAddrLen = sizeof(sockaddr_in);
+            ZeroMemory(&clientAddr, sizeof(clientAddr));
             clientSocket = accept(listenSocket,
                 (struct sockaddr *)&clientAddr,
                 &clientAddrLen);
@@ -209,11 +211,11 @@ void TCPServer::ListenThread()
                 }
             }
             gui.Disconnected(this);
+            if (INVALID_SOCKET != clientSocket) {
+                closesocket(clientSocket);
+                clientSocket = INVALID_SOCKET;
+            }
         }
-    }
-    if (INVALID_SOCKET != clientSocket) {
-        closesocket(clientSocket);
-        clientSocket = INVALID_SOCKET;
     }
 
     if (INVALID_SOCKET != listenSocket) {

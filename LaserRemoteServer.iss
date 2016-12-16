@@ -36,7 +36,7 @@ SolidCompression=yes
 DisableDirPage=auto      
 DisableProgramGroupPage=auto
 DisableReadyPage=true                  
-;SignTool=silsense
+SignTool=silsense
 ;Registry key add PrivilegesRequired
 PrivilegesRequired=poweruser
 
@@ -45,7 +45,8 @@ Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
          
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked   
-Name: Firewall; Description: "Add an exception to the Windows Firewall"; GroupDescription: "Firewall:"; 
+Name: Firewall; Description: "Add an exception to the Windows Firewall"; GroupDescription: "Firewall:";              
+Name: Autostart; Description: "Run application at Windows Startup"; GroupDescription: "Autostart:"; 
 
 [Dirs]
 Name: {app}; Permissions: users-full
@@ -63,12 +64,12 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 
 [Registry]
-Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: Autostart;
 
 [Run]                                                                           
-Filename: "{sys}\netsh.exe"; Parameters: "firewall add allowedprogram ""{app}\Laser Remote Server.exe"" ""Laser Remote Server"""; StatusMsg: "Adding exception to firewall for pragram: Laser Remote Server.exe..."; Flags: runhidden; Tasks: Firewall;
+Filename: "{sys}\netsh.exe"; Parameters: "firewall add allowedprogram ""{app}\{#MyAppExeName}"" ""Laser Remote Server"""; StatusMsg: "Adding exception to firewall for pragram: Laser Remote Server.exe..."; Flags: runhidden; Tasks: Firewall;
 Filename: "{tmp}\vcredist_x86.exe"; Parameters: "/q /norestart"; StatusMsg: "Installing Visual C++ Redistributable Packages (x86)..."; Flags: runhidden
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun] 
-Filename: "{sys}\netsh.exe"; Parameters: "firewall delete allowedprogram program=""{app}\Laser Remote Server.exe"""; Flags: runhidden; Tasks: Firewall; 
+Filename: "{sys}\netsh.exe"; Parameters: "firewall delete allowedprogram program=""{app}\{#MyAppExeName}"""; Flags: runhidden; Tasks: Firewall; 

@@ -21,7 +21,6 @@
 using namespace std;
 
 #define REMOTE_SERVER_INSTANCE_STRING     L"Remote Server"
-#define DEFAULT_LISTEN_BACKLOG            4
 // {f27b335a-e210-4aad-b890-8bc66ff26f2b}
 static const GUID guidServiceClass = 
 { 0xf27b335a, 0xe210, 0x4aad, { 0xb8, 0x90, 0x8b, 0xc6, 0x6f, 0xf2, 0x6f, 0x2b } };

@@ -15,7 +15,7 @@ using namespace std;
 BluetoothServer::BluetoothServer(GUI &gui) :
 gui(gui),
 listenThreadIsRunning(),
-serverSocket(INVALID_SOCKET),
+listenSocket(INVALID_SOCKET),
 clientSocket(INVALID_SOCKET)
 {
     serverType = stBluetooth;
@@ -29,9 +29,9 @@ BluetoothServer::~BluetoothServer() {
             closesocket(clientSocket);
             clientSocket = INVALID_SOCKET;
         }
-        if (serverSocket != INVALID_SOCKET) {
-            closesocket(serverSocket);
-            serverSocket = INVALID_SOCKET;
+        if (listenSocket != INVALID_SOCKET) {
+            closesocket(listenSocket);
+            listenSocket = INVALID_SOCKET;
         }
         listenThread.join();
     }
@@ -119,8 +119,8 @@ void BluetoothServer::ListenThread()
         gui.SetText(IDC_BTH_SERVER_NAME, szThisComputerName);
     }
 
-    serverSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
-    if (serverSocket == INVALID_SOCKET) {
+    listenSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
+    if (listenSocket == INVALID_SOCKET) {
         gui.SetText(IDC_BTH_SERVER_STATUS, L"socket Error!", GUI::wsShow);
         listenThread.detach();
         return;
@@ -131,22 +131,22 @@ void BluetoothServer::ListenThread()
     sockAddrBthLocal.addressFamily = AF_BTH;
     sockAddrBthLocal.port = BT_PORT_ANY;
 
-    if (SOCKET_ERROR == ::bind(serverSocket,
+    if (SOCKET_ERROR == ::bind(listenSocket,
         (struct sockaddr *) &sockAddrBthLocal,
-        sizeof(SOCKADDR_BTH))) {
-        gui.SetText(IDC_BTH_SERVER_STATUS, L"bind Error!", GUI::wsShow);
-        closesocket(serverSocket);
-        serverSocket = INVALID_SOCKET;
+        sockAddrBthLocalLen)) {
+        gui.SetText(IDC_BTH_SERVER_STATUS, L"No Bluetooth Device!", GUI::wsShow);
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
         listenThread.detach();
         return;
     }
 
-    if (SOCKET_ERROR == getsockname(serverSocket,
+    if (SOCKET_ERROR == getsockname(listenSocket,
         (struct sockaddr *)&sockAddrBthLocal,
         &sockAddrBthLocalLen)) {
         gui.SetText(IDC_BTH_SERVER_STATUS, L"getsockname Error!", GUI::wsShow);
-        closesocket(serverSocket);
-        serverSocket = INVALID_SOCKET;
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
         listenThread.detach();
         return;
     }
@@ -172,16 +172,16 @@ void BluetoothServer::ListenThread()
 
     if (SOCKET_ERROR == WSASetService(&wsaQuerySet, RNRSERVICE_REGISTER, 0)) {
         gui.SetText(IDC_BTH_SERVER_STATUS, L"WSASetService Error!", GUI::wsShow);
-        closesocket(serverSocket);
-        serverSocket = INVALID_SOCKET;
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
         listenThread.detach();
         return;
     }
 
-    if (SOCKET_ERROR == listen(serverSocket, DEFAULT_LISTEN_BACKLOG)) {
+    if (SOCKET_ERROR == listen(listenSocket, SOMAXCONN)) {
         gui.SetText(IDC_BTH_SERVER_STATUS, L"listen Error!", GUI::wsShow);
-        closesocket(serverSocket);
-        serverSocket = INVALID_SOCKET;
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
         listenThread.detach();
         return;
     }
@@ -195,7 +195,7 @@ void BluetoothServer::ListenThread()
 
     int numReady;
     FD_SET fdrecv;
-    timeval timeout = { 0, 40000 }; //40ms
+    timeval timeout =       { 0,  10000 }; // 10ms
 
     listenThreadIsRunning = true;
     gui.SetText(IDC_BTH_CLIENT_NAME, L"None", GUI::wsTimedHide);
@@ -203,15 +203,17 @@ void BluetoothServer::ListenThread()
 
         gui.SetText(IDC_BTH_CLIENT_NAME, L"None");
         gui.SetText(IDC_BTH_SERVER_STATUS, L"Listening...");
-        
-        clientSocket = accept(serverSocket,
+
+        clientAddr = { 0 };
+        clientAddrLen = sizeof(SOCKADDR_BTH);
+        clientSocket = accept(listenSocket,
             (struct sockaddr *)&clientAddr,
             &clientAddrLen);
         if (INVALID_SOCKET == clientSocket) {
             if (listenThreadIsRunning) {
                 gui.SetText(IDC_BTH_SERVER_STATUS, L"accept Error!", GUI::wsShow);
-                closesocket(serverSocket);
-                serverSocket = INVALID_SOCKET;
+                closesocket(listenSocket);
+                listenSocket = INVALID_SOCKET;
             }
             else {
                 gui.SetText(IDC_BTH_SERVER_STATUS, L"Ending listening");
@@ -220,7 +222,8 @@ void BluetoothServer::ListenThread()
         }
 
         gui.SetText(IDC_BTH_SERVER_STATUS, L"Connected");
-        gui.SetText(IDC_BTH_CLIENT_NAME, BthAddrToName(clientAddr));
+        wstring clientName = BthAddrToName(clientAddr);
+        gui.SetText(IDC_BTH_CLIENT_NAME, clientName);
         gui.Connected(this);
 
         //wysy³¹nie wersji softu
@@ -276,14 +279,14 @@ void BluetoothServer::ListenThread()
             }
         }
         gui.Disconnected(this);
+        if (clientSocket != INVALID_SOCKET) {
+            closesocket(clientSocket);
+            clientSocket = INVALID_SOCKET;
+        }
     }
-    if (clientSocket != INVALID_SOCKET) {
-        closesocket(clientSocket);
-        clientSocket = INVALID_SOCKET;
-    }
-    if (serverSocket != INVALID_SOCKET) {
-        closesocket(serverSocket);
-        serverSocket = INVALID_SOCKET;
+    if (listenSocket != INVALID_SOCKET) {
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
     }
     listenThreadIsRunning = false;
 }
