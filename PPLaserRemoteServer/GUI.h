@@ -32,7 +32,8 @@ enum msg_type_t {
     msg_type_gesture = 2,           /*!< Gest myszk¹ */
     msg_type_gyro = 3,              /*!< ¯yroskop    */
     msg_type_keyboard = 4,          /*!< Klawisz     */
-    msg_type_version = 5            /*!< Wersja      */
+    msg_type_version = 5,           /*!< Wersja      */
+    msg_type_wheel = 6              /*!< Rolka myszy */
 };
 
 enum server_type_en {
@@ -73,6 +74,7 @@ private:
     //Server Events
     clock_t lastEventReceived;
     int zoomCount;
+    int ints[2], dx, dy;
     deque<const Server *> connectedServers;
     deque<ScrrenRect> screens;
     mutex serverMutex;

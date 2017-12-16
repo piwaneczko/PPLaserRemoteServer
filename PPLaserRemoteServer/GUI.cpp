@@ -166,7 +166,8 @@ GUI::GUI() :
     downloader(
         L"https://docs.google.com/uc?authuser=0&id=0B-WV4mqjX8JgSUJkN0ptWWxSMmc&export=download",
         L"https://docs.google.com/uc?id=0B-WV4mqjX8JgQTVTcXNmWXRkaEE&export=download"),
-    hidden()
+    hidden(),
+    zoomCount(1)
 {
     hInstance = GetModuleHandle(0);
     hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), NULL, (DLGPROC)DlgProc);
@@ -210,8 +211,9 @@ GUI::GUI() :
     EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)this);
     assert(screens.size() > 0);
     lastEventReceived = 0;
-    zoomCount = 1;
     downloadThread = thread(&GUI::DownloadThread, this);
+
+    SetThreadExecutionState(ES_SYSTEM_REQUIRED);
 }
 GUI::~GUI() {
     Shell_NotifyIcon(NIM_DELETE, &niData);
@@ -378,17 +380,81 @@ string ws2s(const wstring& ws)
     return strTo;
 }
 
+BOOL CALLBACK KillScreenSaverFunc(HWND hwnd, LPARAM lParam)
+{
+    if (IsWindowVisible(hwnd))
+        PostMessage(hwnd, WM_CLOSE, 0, 0);
+    return TRUE;
+}
+void KillScreenSaver() {
+    BOOL isRunning;
+    if (SystemParametersInfo(SPI_GETSCREENSAVERRUNNING, NULL, &isRunning, NULL) && (isRunning == TRUE)) {
+        HDESK hdesk;
+        hdesk = OpenDesktop(TEXT("Screen-saver"), 0, FALSE, DESKTOP_READOBJECTS | DESKTOP_WRITEOBJECTS);
+        if (hdesk)
+        {
+            EnumDesktopWindows(hdesk, KillScreenSaverFunc, 0);
+            CloseDesktop(hdesk);
+        }
+        else
+        {
+            PostMessage(GetForegroundWindow(), WM_CLOSE, 0, 0L);
+        }
+    }
+}
+
 #if _DEBUG
 size_t debugGoodCount = 0;
 size_t debugBadCount = 0;
 #endif
-void keybd_event(uint8_t keyCode) {
-    keybd_event(keyCode, MapVirtualKey(keyCode, MAPVK_VK_TO_VSC), 0, 0);
-    keybd_event(keyCode, MapVirtualKey(keyCode, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+enum KeyClickFlag { key_down, key_up, key_both };
+void keybd_event(uint16_t keyCode, KeyClickFlag flag = key_both, uint8_t scancode = 0) {
+    INPUT ip;
+    ip.type = INPUT_KEYBOARD;
+    ip.ki.dwExtraInfo = 0;
+    ip.ki.time = 0;
+    ip.ki.dwFlags = scancode == 2 ? KEYEVENTF_UNICODE : (((scancode == 1) && (flag == key_both)) ? KEYEVENTF_SCANCODE : 0);
+    ip.ki.wVk = scancode == 2 ? 0 : keyCode;
+    ip.ki.wScan = scancode == 2 ? keyCode : MapVirtualKey(keyCode, MAPVK_VK_TO_VSC);
+
+    if (flag != key_up) {
+        SendInput(1, &ip, sizeof(INPUT));
+    }
+
+    if (flag != key_down) {
+        ip.ki.dwFlags |= KEYEVENTF_KEYUP; 
+        SendInput(1, &ip, sizeof(INPUT));
+        KillScreenSaver();
+    }
 }
+
+void mouse_event(uint16_t flag, int32_t dx = 0, int32_t dy = 0) {
+    INPUT ip;
+    ip.type = INPUT_MOUSE;
+    ip.mi.dwExtraInfo = 0;
+    if (flag == MOUSEEVENTF_WHEEL) {
+        ip.mi.dx = ip.mi.dy = 0;
+        if (dx != 0) {
+            ip.mi.mouseData = dx * WHEEL_DELTA;
+            flag = MOUSEEVENTF_HWHEEL;
+        }
+        else
+            ip.mi.mouseData = dy * WHEEL_DELTA;
+    }
+    else {
+        ip.mi.dx = dx;
+        ip.mi.dy = dy;
+        ip.mi.mouseData = 0;
+    }
+    ip.mi.time = 0;
+    ip.mi.dwFlags = flag | ((flag & MOUSEEVENTF_ABSOLUTE == 0) ? MOUSEEVENTF_VIRTUALDESK : 0);
+    SendInput(1, &ip, sizeof(INPUT));
+    KillScreenSaver();
+}
+
 void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
 {
-    serverMutex.lock();
+    //serverMutex.lock();
     if (connectedServers.size() > 0 && connectedServers.front() == server && dataLen >= 2) {
         uint16_t crc = CRC_INIT;
         for (uint16_t i = 0; i < dataLen; i++) 
@@ -415,9 +481,9 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                     keybd_event(VK_F5);
                     break;
                 case msg_key_type_shf5:
-                    keybd_event(VK_LSHIFT, MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_LSHIFT, key_down);
                     keybd_event(VK_F5);
-                    keybd_event(VK_LSHIFT, MapVirtualKey(VK_LSHIFT, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_LSHIFT, key_up);
                     break;
                 case msg_key_type_prev:
                     keybd_event(VK_LEFT);
@@ -426,16 +492,16 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                     keybd_event(VK_RIGHT);
                     break;
                 case msg_key_type_left_down:
-                    mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                    mouse_event(MOUSEEVENTF_LEFTDOWN);
                     break;
                 case msg_key_type_left_up:
-                    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                    mouse_event(MOUSEEVENTF_LEFTUP);
                     break;
                 case msg_key_type_right_down:
-                    mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+                    mouse_event(MOUSEEVENTF_RIGHTDOWN);
                     break;
                 case msg_key_type_right_up:
-                    mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+                    mouse_event(MOUSEEVENTF_RIGHTUP);
                     break;
                 case msg_key_type_volume_down:
                     keybd_event(VK_VOLUME_DOWN);
@@ -444,22 +510,41 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                     keybd_event(VK_VOLUME_UP);
                     break;
                 case msg_key_type_zoom_in:
-                    keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), 0, 0);
+                    if (zoomCount == 1) {
+                        //duplicate
+                        long i = 0, res;
+                        DISPLAY_DEVICE dd;
+                        DEVMODE dm;
+                        ZeroMemory(&dd, sizeof(DISPLAY_DEVICE));
+                        dd.cb = sizeof(DISPLAY_DEVICE);
+                        while (EnumDisplayDevices(0, i, &dd, 0)) {
+                            ZeroMemory(&dm, sizeof(DEVMODE));
+                            dm.dmSize = sizeof(DEVMODE);
+                            if (EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm))
+                            {
+                                dm.dmPosition.x = dm.dmPosition.y = 0;
+                                res = ChangeDisplaySettingsEx(dd.DeviceName, &dm, 0, 0, 0);
+                            }
+                            i++;
+                            ZeroMemory(&dd, sizeof(DISPLAY_DEVICE));
+                            dd.cb = sizeof(DISPLAY_DEVICE);
+                        }
+                    }
+                    keybd_event(VK_LWIN, key_down);
                     keybd_event(VK_ADD);
-                    keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
+                    keybd_event(VK_LWIN, key_up);
                     zoomCount++;
                     break;
                 case msg_key_type_zoom_out:
-                    keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), 0, 0);
-                    if (zoomCount > 1)
-                        zoomCount--;
-                    if (zoomCount > 1) {
-                        keybd_event(VK_SUBTRACT);
+                     if (zoomCount > 1) {
+                        keybd_event(VK_LWIN, key_down);
+                        keybd_event(zoomCount == 2 ? VK_ESCAPE : VK_SUBTRACT);
+                        keybd_event(VK_LWIN, key_up);
+                        zoomCount--; 
+                        if (zoomCount == 1) {
+                            //poprzedni
+                        }
                     }
-                    else {
-                        keybd_event(VK_ESCAPE);
-                    }
-                    keybd_event(VK_LWIN, MapVirtualKey(VK_LWIN, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
                     break;
                 default:
                     break;
@@ -468,38 +553,45 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
             case msg_type_laser:
                 if (data[1]) {
                     SetTrayIcon(IDI_LASER_ICON_ON, L"");
-                    keybd_event(VK_LCONTROL, MapVirtualKey(VK_LCONTROL, MAPVK_VK_TO_VSC), 0, 0);
+                    keybd_event(VK_LCONTROL, key_down);
                     if ((eventReceived - lastEventReceived) < 5000) {
                         // bez zmiany pozycji
-                        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                        mouse_event(MOUSEEVENTF_LEFTDOWN);
                     }
                     else {
                         //wyœrodkowanie
-                        mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, 0x8000, 0x8000, 0, 0);
+                        mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, 0x8000, 0x8000);
                     }
                 }
                 else {
                     SetTrayIcon(IDI_LASER_ICON_OFF, L"");
-                    keybd_event(VK_LCONTROL, MapVirtualKey(VK_LCONTROL, MAPVK_VK_TO_VSC), KEYEVENTF_KEYUP, 0);
-                    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                    keybd_event(VK_LCONTROL, key_up);
+                    mouse_event(MOUSEEVENTF_LEFTUP);
                 }
                 break;
             case msg_type_gesture:
                 if (dataLen == 11) {
-                    int ints[2], dx, dy;
                     memcpy(&ints[0], &data[1], 8);
                     dx = int(float(ints[0]) * screens[0].width / (zoomCount * 1000000.0f));
                     dy = int(float(ints[1]) * screens[0].height / (zoomCount * 1000000.0f));
-                    mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
+                    mouse_event(MOUSEEVENTF_MOVE, dx, dy);
+
+                }
+                break;
+            case msg_type_wheel:
+                if (dataLen == 11) {
+                    memcpy(&ints[0], &data[1], 8);
+                    dx = ints[0];
+                    dy = ints[1];
+                    mouse_event(MOUSEEVENTF_WHEEL, dx, dy);
                 }
                 break;
             case msg_type_gyro:
                 if (dataLen == 11) {
-                    int ints[2], dx, dy;
                     memcpy(&ints, &data[1], 8);
                     dx = int(float(ints[0]) / (zoomCount * 1000000.0f) * screens[0].width / float(M_PI / 3.0));
                     dy = int(float(ints[1]) / (zoomCount * 1000000.0f) * screens[0].width / float(M_PI / 3.0));
-                    mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
+                    mouse_event(MOUSEEVENTF_MOVE, dx, dy);
                 }
                 break;
             case msg_type_keyboard:
@@ -521,18 +613,11 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                     case VK_F7: case VK_F8: case VK_F9: case VK_F10: case VK_F11: case VK_F12:
                     case VK_F13: case VK_F14: case VK_F15: case VK_F16: case VK_F17: case VK_F18:
                     case VK_F19: case VK_F20: case VK_F21: case VK_F22: case VK_F23: case VK_F24:
-                        keybd_event(byteKeyCode);
+                        keybd_event(byteKeyCode, key_both, 1);
                         break;
-                    default: {
-                        INPUT ip;
-                        ip.type = INPUT_KEYBOARD;
-                        ip.ki.time = 0;
-                        ip.ki.dwFlags = KEYEVENTF_UNICODE; // Specify the key as a unicode character
-                        ip.ki.wScan = keyCode; // Which keypress to simulate
-                        ip.ki.wVk = 0;
-                        ip.ki.dwExtraInfo = 0;
-                        SendInput(1, &ip, sizeof(INPUT));
-                    } break;
+                    default: 
+                        keybd_event(keyCode, key_down, 2);
+                        break;
                     }
                 }
                 break;
@@ -540,7 +625,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
             lastEventReceived = eventReceived;
         }
     }
-    serverMutex.unlock();
+    //serverMutex.unlock();
 }
 void GUI::Connected(const Server *server)
 {
@@ -572,6 +657,7 @@ uint16_t Server::GetDataLen(msg_type_t type) const
     switch (type)
     {
     case msg_type_gesture:
+    case msg_type_wheel:
     case msg_type_gyro:
         dlen = 11;
         break;
