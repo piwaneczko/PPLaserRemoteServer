@@ -1,8 +1,8 @@
 /**
-* \brief ¯ród³o klasy interfejsu graficznego
-* \file GUI.cpp
-* \author Pawe³ Iwaneczko
-*/
+ * \brief ¯ród³o klasy interfejsu graficznego
+ * \file GUI.cpp
+ * \author Pawe³ Iwaneczko
+ */
 
 #include "GUI.h"
 #include <assert.h>
@@ -435,11 +435,11 @@ void mouse_event(uint16_t flag, int32_t dx = 0, int32_t dy = 0) {
     if (flag == MOUSEEVENTF_WHEEL) {
         ip.mi.dx = ip.mi.dy = 0;
         if (dx != 0) {
-            ip.mi.mouseData = dx * WHEEL_DELTA;
+            ip.mi.mouseData = dx * WHEEL_DELTA/3;
             flag = MOUSEEVENTF_HWHEEL;
         }
         else
-            ip.mi.mouseData = dy * WHEEL_DELTA;
+            ip.mi.mouseData = dy * WHEEL_DELTA/3;
     }
     else {
         ip.mi.dx = dx;

@@ -26,7 +26,7 @@ DefaultDirName={pf}\{#MyAppPublisher}\{#MyAppName}
 DefaultGroupName={#MyAppPublisher}\{#MyAppName}
 OutputBaseFilename=Laser Remote Server Setup
 ;OutputDir=Release
-OutputDir=C:\Users\Pawel Iwaneczko\Dysk Google\Programy\PowerPoint\
+OutputDir=C:\Users\pawel\Dysk Google\Programy\PowerPoint\
 WizardImageFile=silsense.bmp
 WizardSmallImageFile=silsensesmall.bmp
 WizardImageStretch=False
@@ -35,8 +35,7 @@ Compression=lzma
 SolidCompression=yes
 DisableDirPage=auto      
 DisableProgramGroupPage=auto
-DisableReadyPage=true                  
-SignTool=silsense
+DisableReadyPage=true                 
 ;Registry key add PrivilegesRequired
 PrivilegesRequired=poweruser
 
