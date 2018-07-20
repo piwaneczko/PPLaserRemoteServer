@@ -32,7 +32,8 @@ enum msg_key_type_t {
     msg_key_type_volume_down = 9,
     msg_key_type_volume_up = 10,
     msg_key_type_zoom_in = 11,
-    msg_key_type_zoom_out = 12
+    msg_key_type_zoom_out = 12,
+    msg_key_type_pause = 13
 };
 
 #define CRC_INIT		0xFFFFu
@@ -545,6 +546,9 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen)
                             //poprzedni
                         }
                     }
+                    break;
+                case msg_key_type_pause:
+                    keybd_event(VkKeyScan('B'), 0xB0, 0, 0);
                     break;
                 default:
                     break;

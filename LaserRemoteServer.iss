@@ -30,7 +30,6 @@ OutputDir=C:\Users\pawel\Dysk Google\Programy\PowerPoint\
 WizardImageFile=silsense.bmp
 WizardSmallImageFile=silsensesmall.bmp
 WizardImageStretch=False
-WizardImageBackColor=clWhite
 Compression=lzma
 SolidCompression=yes
 DisableDirPage=auto      
@@ -38,6 +37,7 @@ DisableProgramGroupPage=auto
 DisableReadyPage=true                 
 ;Registry key add PrivilegesRequired
 PrivilegesRequired=poweruser
+UninstallDisplayIcon=PPLaserRemoteServer\laser_icon.ico
 
 [Languages]
 Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
@@ -66,9 +66,9 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: 
 Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: Autostart;
 
 [Run]                                                                           
-Filename: "{sys}\netsh.exe"; Parameters: "firewall add allowedprogram ""{app}\{#MyAppExeName}"" ""Laser Remote Server"""; StatusMsg: "Adding exception to firewall for pragram: Laser Remote Server.exe..."; Flags: runhidden; Tasks: Firewall;
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Laser Remote Server"" dir=in action=allow program=""{app}\{#MyAppExeName}"" protocol=TCP enable=yes"; StatusMsg: "Adding exception to firewall for pragram: Laser Remote Server.exe..."; Flags: runhidden; Tasks: Firewall;
 Filename: "{tmp}\vcredist_x86.exe"; Parameters: "/q /norestart"; StatusMsg: "Installing Visual C++ Redistributable Packages (x86)..."; Flags: runhidden
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun] 
-Filename: "{sys}\netsh.exe"; Parameters: "firewall delete allowedprogram program=""{app}\{#MyAppExeName}"""; Flags: runhidden; Tasks: Firewall; 
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Laser Remote Server"""; Flags: runhidden; Tasks: Firewall; 
