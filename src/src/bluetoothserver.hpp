@@ -1,27 +1,27 @@
 /**
-* \brief Nag³ówek klasy serwera bluetooth
-* \file BluetoothServer.h
-* \author Pawe³ Iwaneczko
-*/
+ * \brief Nag³ówek klasy serwera bluetooth
+ * \file BluetoothServer.h
+ * \author Pawe³ Iwaneczko
+ */
 
 #pragma once
 #ifndef IG_BLUETOOTH_SERVER_H
 #define IG_BLUETOOTH_SERVER_H
 
 #include <thread>
-#include "GUI.h"
+#include "GUI.hpp"
 
 /**
  * Klasa serwera Bluetooth
  */
-class BluetoothServer : public Server
-{
+class BluetoothServer : public Server {
 private:
     GUI &gui;
     thread listenThread;
     uint32_t listenSocket, clientSocket;
     bool listenThreadIsRunning;
     void ListenThread();
+
 public:
     /**
      * Konstruktor klasy serwera Bluetooth

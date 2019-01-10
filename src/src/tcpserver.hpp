@@ -1,21 +1,20 @@
 /**
-* \brief Nag³ówek klasy serwera TCP/IP
-* \file TCPServer.h
-* \author Pawe³ Iwaneczko
-*/
+ * \brief Nag³ówek klasy serwera TCP/IP
+ * \file TCPServer.h
+ * \author Pawe³ Iwaneczko
+ */
 
 #pragma once
 #ifndef IG_TCP_SERVER_H
 #define IG_TCP_SERVER_H
 
 #include <thread>
-#include "GUI.h"
+#include "GUI.hpp"
 
 /**
  * Klasa serwera TCP/IP
  */
-class TCPServer : public Server
-{
+class TCPServer : public Server {
 private:
     GUI &gui;
     thread listenThread;
@@ -23,6 +22,7 @@ private:
     bool listenThreadIsRunning;
     void ListenThread();
     void SetServerIPs(uint16_t port);
+
 public:
     /**
      * Konstruktor klasy serwera TCP/IP

@@ -1,46 +1,42 @@
 /**
-* \brief Nag³ówek klasy interfejsu graficznego
-* \file GUI.h
-* \author Pawe³ Iwaneczko
-*/
+ * \brief Nag³ówek klasy interfejsu graficznego
+ * \file GUI.h
+ * \author Pawe³ Iwaneczko
+ */
 
 #pragma once
 #ifndef IG_GUI_H
 #define IG_GUI_H
 
-#include <iostream>
-#include <cstdint>
-#include <string>
-#include <deque>
-#include <mutex>
-#include <thread>
 #include <Windows.h>
-#include "UpdateDownloader.hpp"
+#include <cstdint>
+#include <deque>
+#include <iostream>
+#include <mutex>
+#include <string>
+#include <thread>
+// TODO - uncomment
+//#include "UpdateDownloader.hpp"
 #include "resource.h"
 
 using namespace std;
 
-#define REMOTE_SERVER_INSTANCE_STRING     L"Remote Server"
+#define REMOTE_SERVER_INSTANCE_STRING L"Remote Server"
 // {f27b335a-e210-4aad-b890-8bc66ff26f2b}
-static const GUID guidServiceClass = 
-{ 0xf27b335a, 0xe210, 0x4aad, { 0xb8, 0x90, 0x8b, 0xc6, 0x6f, 0xf2, 0x6f, 0x2b } };
+static const GUID guidServiceClass = {0xf27b335a, 0xe210, 0x4aad, {0xb8, 0x90, 0x8b, 0xc6, 0x6f, 0xf2, 0x6f, 0x2b}};
 
 /* Lista wyliczeniowa typu komunikatów */
 enum msg_type_t {
-    msg_type_button = 0,            /*!< Przycisk    */
-    msg_type_laser = 1,             /*!< Laser       */
-    msg_type_gesture = 2,           /*!< Gest myszk¹ */
-    msg_type_gyro = 3,              /*!< ¯yroskop    */
-    msg_type_keyboard = 4,          /*!< Klawisz     */
-    msg_type_version = 5,           /*!< Wersja      */
-    msg_type_wheel = 6              /*!< Rolka myszy */
+    msg_type_button = 0,   /*!< Przycisk    */
+    msg_type_laser = 1,    /*!< Laser       */
+    msg_type_gesture = 2,  /*!< Gest myszk¹ */
+    msg_type_gyro = 3,     /*!< ¯yroskop    */
+    msg_type_keyboard = 4, /*!< Klawisz     */
+    msg_type_version = 5,  /*!< Wersja      */
+    msg_type_wheel = 6     /*!< Rolka myszy */
 };
 
-enum server_type_en {
-    stUnspecified,
-    stBluetooth,
-    stTCP
-};
+enum server_type_en { stUnspecified, stBluetooth, stTCP };
 
 /**
  * Klasa abstarackyjna serwera
@@ -49,6 +45,7 @@ class Server {
 protected:
     server_type_en serverType = stUnspecified;
     uint16_t GetDataLen(msg_type_t type) const;
+
 public:
     /**
      * Pobranie pola serverType
@@ -67,11 +64,12 @@ struct ScrrenRect {
  */
 class GUI {
 private:
-    //Update
-    UpdateDownloader downloader;
+    // Update
+    // TODO - uncomment
+    // UpdateDownloader downloader;
     thread downloadThread;
     void DownloadThread();
-    //Server Events
+    // Server Events
     clock_t lastEventReceived;
     int zoomCount;
     int ints[2], dx, dy;
@@ -87,22 +85,22 @@ private:
     void ShowContextMenu(HWND hWnd);
     // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
     GUI();
-    //Destruktor - usuwa ikonê systemow¹
+    // Destruktor - usuwa ikonê systemow¹
     ~GUI();
+
 public:
     /* Lista wyliczeniowa stau okna */
-    enum window_state
-    {
-        wsDefault,              /**< Bez zmiany stanu okna */
-        wsShow,                 /**< Pokazanie okna        */
-        wsHide,                 /**< Ukrycie okna          */
-        wsTimedHide             /**< Ukrycie okna po 2s    */
+    enum window_state {
+        wsDefault,  /**< Bez zmiany stanu okna */
+        wsShow,     /**< Pokazanie okna        */
+        wsHide,     /**< Ukrycie okna          */
+        wsTimedHide /**< Ukrycie okna po 2s    */
     };
     /**
      * Pobieranie instancji klasy interfejsu graficznego aplikacji
      * \return Referencja na statyczny obiekt typu GUI
      */
-    static GUI& GetInstance();
+    static GUI &GetInstance();
     /**
      * Pêtla g³ówna przetwarzaj¹ca komunikaty systemowe. Koñczy siê po zamkniêciu aplikacji
      */
@@ -110,13 +108,13 @@ public:
     /**
      * Modyfikacja obrazu oraz tekstu informacyjnego ikony w pasku systemowym
      * \param[in] iconId     Identyfikator ikony. Wartoœci od 101 do 105
-     * \param[in] info       Text informacyjny, który poka¿e siê w powiadomieniu nad ikon¹ systemow¹. 
+     * \param[in] info       Text informacyjny, który poka¿e siê w powiadomieniu nad ikon¹ systemow¹.
      *                       Aby nie wyœwietlaæ nale¿y ustawiæ ""
      * \param[in] iconFlag   Flaga ikony w powiadomieniu
      */
     bool SetTrayIcon(int iconId, const wstring &info = L"", int nifIconFlag = NIIF_NONE);
     /**
-     * Ukrycie powiadomienia 
+     * Ukrycie powiadomienia
      */
     bool HideTrayIcon();
     /**
