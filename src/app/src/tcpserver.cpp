@@ -8,15 +8,13 @@
 #include <ws2tcpip.h>
 // TCPServer.hpp include need to be agter ws2tcpip
 #include "TCPServer.hpp"
-//#include "XmlConfig.hpp"
+#include "XmlConfig.hpp"
 
 using namespace std;
 
 #define RECV_BUFF_MAX_LEN 22 /**< Maksymalny rozmiar bufora odebranych danych */
 
-// TODO - uncomment
-// XmlConfigValue<uint16_t> DefaultPort("TcpDefaultPort", 3389);
-uint16_t DefaultPort{3389};
+XmlConfigValue<uint16_t> DefaultPort("TcpDefaultPort", 3389);
 
 bool CheckPortTCP(uint16_t dwPort) {
     sockaddr_in client;
@@ -149,8 +147,7 @@ void TCPServer::ListenThread() {
             gui.Connected(this);
 
             // wysy³¹nie wersji softu
-            // TODO - uncomment
-            /*file_version_t ver;
+            file_version_t ver;
             if (UpdateDownloader::GetFileVersion(ver)) {
                 buff[0] = msg_type_version;
                 buff[1] = (uint8_t)((ver.major & 0xFF00) >> 8);
@@ -158,7 +155,7 @@ void TCPServer::ListenThread() {
                 buff[3] = (uint8_t)((ver.minor & 0xFF00) >> 8);
                 buff[4] = (uint8_t)((ver.minor & 0x00FF));
                 send(clientSocket, (const char *)buff, 5, 0);
-            }*/
+            }
             while (listenThreadIsRunning) {
                 FD_ZERO(&fdrecv);
                 FD_SET(clientSocket, &fdrecv);

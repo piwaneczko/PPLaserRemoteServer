@@ -15,8 +15,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
-// TODO - uncomment
-//#include "UpdateDownloader.hpp"
+#include "UpdateDownloader.hpp"
 #include "resource.h"
 
 using namespace std;
@@ -65,8 +64,7 @@ struct ScrrenRect {
 class GUI {
 private:
     // Update
-    // TODO - uncomment
-    // UpdateDownloader downloader;
+    UpdateDownloader downloader;
     thread downloadThread;
     void DownloadThread();
     // Server Events

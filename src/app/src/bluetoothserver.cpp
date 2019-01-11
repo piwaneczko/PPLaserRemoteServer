@@ -201,8 +201,7 @@ void BluetoothServer::ListenThread() {
         gui.Connected(this);
 
         // wysy³¹nie wersji softu
-        // TODO - uncomment
-        /*file_version_t ver;
+        file_version_t ver;
         if (UpdateDownloader::GetFileVersion(ver)) {
             buff[0] = msg_type_version;
             buff[1] = (uint8_t)((ver.major & 0xFF00) >> 8);
@@ -210,7 +209,7 @@ void BluetoothServer::ListenThread() {
             buff[3] = (uint8_t)((ver.minor & 0xFF00) >> 8);
             buff[4] = (uint8_t)((ver.minor & 0x00FF));
             send(clientSocket, (const char *)buff, 5, 0);
-        }*/
+        }
         while (listenThreadIsRunning) {
             FD_ZERO(&fdrecv);
             FD_SET(clientSocket, &fdrecv);

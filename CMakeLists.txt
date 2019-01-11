@@ -30,7 +30,7 @@ else()
 message(STATUS "Using Inno Setup Compiler from: ${ISS_COMPILER}")
 
 # Add installer target
-add_custom_target(INSTALL_Inno COMMAND ${ISS_COMPILER} "${CMAKE_CURRENT_SOURCE_DIR}/install.iss" VERBATIM)
+add_custom_target(InnoSetup COMMAND ${ISS_COMPILER} "${CMAKE_CURRENT_SOURCE_DIR}/install.iss" VERBATIM)
 endif()
 endif() 
 

@@ -4,8 +4,8 @@
 #define MyAppName "Laser Remote Server"        
 #define MyAppPublisher "SilSense Technologies"
 #define MyAppURL "http://www.SilSense.pl/" 
-#define MyAppExeName "Laser Remote Server.exe"    
-#define MyAppVersion GetFileVersion('Release\Laser Remote Server.exe')    
+#define MyAppExeName "PPLaserRemoteServer.exe"    
+#define MyAppVersion GetFileVersion('install\bin\PPLaserRemoteServer.exe')    
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application.
@@ -25,10 +25,9 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={pf}\{#MyAppPublisher}\{#MyAppName}
 DefaultGroupName={#MyAppPublisher}\{#MyAppName}
 OutputBaseFilename=Laser Remote Server Setup
-;OutputDir=Release
-OutputDir=C:\Users\pawel\Dysk Google\Programy\PowerPoint\
-WizardImageFile=silsense.bmp
-WizardSmallImageFile=silsensesmall.bmp
+OutputDir=install\bin
+WizardImageFile=src\app\resources\silsense.bmp
+WizardSmallImageFile=src\app\resources\silsensesmall.bmp
 WizardImageStretch=False
 Compression=lzma
 SolidCompression=yes
@@ -51,9 +50,9 @@ Name: Autostart; Description: "Run application at Windows Startup"; GroupDescrip
 Name: {app}; Permissions: users-full
 
 [Files]           
-Source: "Release\{#MyAppExeName}"; DestDir: "{app}"    
-Source: "Release\{#MyAppExeName}.xml"; DestDir: "{app}" 
-Source: "..\glemm vs\Drivers\vcredist_x86.exe"; DestDir: {tmp}; Flags: deleteafterinstall   
+Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"    
+Source: "install\bin\{#MyAppExeName}.xml"; DestDir: "{app}" 
+Source: "install\deps\vc_redist.x86.exe"; DestDir: {tmp}; Flags: deleteafterinstall   
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
@@ -67,7 +66,7 @@ Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]                                                                           
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Laser Remote Server"" dir=in action=allow program=""{app}\{#MyAppExeName}"" protocol=TCP enable=yes"; StatusMsg: "Adding exception to firewall for pragram: Laser Remote Server.exe..."; Flags: runhidden; Tasks: Firewall;
-Filename: "{tmp}\vcredist_x86.exe"; Parameters: "/q /norestart"; StatusMsg: "Installing Visual C++ Redistributable Packages (x86)..."; Flags: runhidden
+Filename: "{tmp}\vc_redist.x86.exe"; Parameters: "/q /norestart"; StatusMsg: "Installing Visual C++ Redistributable Packages (x86)..."; Flags: runhidden
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun] 

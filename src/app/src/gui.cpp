@@ -8,8 +8,7 @@
 #include <ShObjIdl.h>
 #include <assert.h>
 #include <math.h>
-// TODO - uncomment
-//#include "XmlConfig.hpp"
+#include "XmlConfig.hpp"
 
 using namespace std;
 
@@ -39,15 +38,10 @@ enum msg_key_type_t {
 #define CRC_INIT 0xFFFFu
 #define CRC_VALID 0xF0B8u
 
-// TODO - uncomment
-// XmlConfigValue<bool> ShowNotification("ShowNotification", true);
-// XmlConfigValue<bool> SoundNotification("SoundNotification", false);
-// XmlConfigValue<bool> TempDirectory("UpdateTemporaryDirectory", true);
-// XmlConfigValue<uint32_t> AutoHide("Autohide time (milliseconds)", 3000);
-bool ShowNotification{true};
-bool SoundNotification{false};
-bool TempDirectory{true};
-uint32_t AutoHide{3000};
+XmlConfigValue<bool> ShowNotification("ShowNotification", true);
+XmlConfigValue<bool> SoundNotification("SoundNotification", false);
+XmlConfigValue<bool> TempDirectory("UpdateTemporaryDirectory", true);
+XmlConfigValue<uint32_t> AutoHide("Autohide time (milliseconds)", 3000);
 
 /**
  * Aktualizacja sumy kontrolnej
@@ -149,8 +143,8 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMoni
 }
 
 GUI::GUI()
-    : /*downloader(L"https://docs.google.com/uc?authuser=0&id=0B-WV4mqjX8JgSUJkN0ptWWxSMmc&export=download",
-                 L"https://docs.google.com/uc?id=0B-WV4mqjX8JgQTVTcXNmWXRkaEE&export=download"),*/
+    : downloader(L"https://docs.google.com/uc?authuser=0&id=0B-WV4mqjX8JgSUJkN0ptWWxSMmc&export=download",
+                 L"https://docs.google.com/uc?id=0B-WV4mqjX8JgQTVTcXNmWXRkaEE&export=download"),
       hidden(),
       zoomCount(1) {
     hInstance = GetModuleHandle(0);
@@ -196,7 +190,7 @@ GUI::GUI()
 }
 GUI::~GUI() {
     Shell_NotifyIcon(NIM_DELETE, &niData);
-    // downloader.AbortDownload();
+    downloader.AbortDownload();
     if (downloadThread.joinable()) downloadThread.join();
 }
 void ChangeUpdateGroupVisibility(HWND hWnd, bool visible) {
@@ -232,7 +226,7 @@ void OnUpdateProgress(float value, void *user) {
     }
 }
 void GUI::DownloadThread() {
-    wstring version = L"";  // downloader.CheckVersion(UD_CHECK_BASE);
+    wstring version = downloader.CheckVersion(UD_CHECK_BASE);
     if (!version.empty()) {
         KillTimer(hWnd, ID_TIMER);
         if (MessageBox(nullptr,
@@ -244,7 +238,7 @@ void GUI::DownloadThread() {
             ShowWindow(hWnd, SW_SHOWDEFAULT);
             UpdateWindow(hWnd);
             SetTrayIcon(IDI_UPDATE, L"Downloading started!", NIIF_INFO);
-            int result = 0;  // downloader.DownloadAndUpdate(&OnUpdateProgress, (void *)&hWnd, TempDirectory);
+            int result = downloader.DownloadAndUpdate(&OnUpdateProgress, (void *)&hWnd, TempDirectory);
             switch (result) {
                 case S_OK:
                     SetTrayIcon(IDI_UPDATE, L"Downloading ended!", NIIF_INFO);
