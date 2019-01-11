@@ -1,12 +1,12 @@
 #include <iostream>
 #include "XmlConfig.hpp"
+// Windows.h need to be included after XmlConfig.hpp
 #include <Windows.h>
 using namespace std;
 
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
-XmlConfig::XmlConfig()
-{
+XmlConfig::XmlConfig() {
     char modulePath[MAX_PATH];
     GetModuleFileNameA((HINSTANCE)&__ImageBase, modulePath, MAX_PATH);
     filePath = modulePath;
@@ -16,26 +16,21 @@ XmlConfig::XmlConfig()
     }
 }
 
-XmlConfig & XmlConfig::GetInstance()
-{
+XmlConfig &XmlConfig::GetInstance() {
     static XmlConfig xml;
     return xml;
 }
 
-XmlConfig::~XmlConfig()
-{
+XmlConfig::~XmlConfig() {
     UpdateXmlFile();
 }
 
-void XmlConfig::UpdateXmlFile()
-{
+void XmlConfig::UpdateXmlFile() {
     XmlConfig &xml = GetInstance();
-    if (xml.filePath.empty())
-        return;
+    if (xml.filePath.empty()) return;
     xml.doc.save_file(xml.filePath.c_str());
 }
-void XmlConfig::SetXMLFilePath(string filePath)
-{
+void XmlConfig::SetXMLFilePath(string filePath) {
     XmlConfig &xml = GetInstance();
     if (xml.filePath != filePath) {
         xml.doc.save_file(xml.filePath.c_str());
@@ -45,13 +40,11 @@ void XmlConfig::SetXMLFilePath(string filePath)
         }
     }
 }
-string XmlConfig::GetXMLFilePath()
-{
+string XmlConfig::GetXMLFilePath() {
     XmlConfig &xml = GetInstance();
     return xml.filePath;
 }
-bool XmlConfig::FindElement(const XmlConfigElement & element, xml_attribute & attr)
-{
+bool XmlConfig::FindElement(const XmlConfigElement &element, xml_attribute &attr) {
     XmlConfig &xml = XmlConfig::GetInstance();
     if (xml.filePath.empty())
         return false;
@@ -59,7 +52,7 @@ bool XmlConfig::FindElement(const XmlConfigElement & element, xml_attribute & at
         xml.doc.reset();
         return false;
     }
-    
+
     XmlConfigGroup *group = element.parent;
 
     bool result = true;
@@ -69,7 +62,7 @@ bool XmlConfig::FindElement(const XmlConfigElement & element, xml_attribute & at
         result = false;
     }
     if (group != nullptr) {
-        //element posiada grupê
+        // element posiada grupê
         xml_node gr_node;
         result = false;
         for (xml_node &gr : config.children("group")) {
@@ -110,8 +103,7 @@ bool XmlConfig::FindElement(const XmlConfigElement & element, xml_attribute & at
         result = false;
     }
 
-    if (!result)
-        UpdateXmlFile();
+    if (!result) UpdateXmlFile();
 
     assert(!attr.empty() && "attribute is empty");
     return result;

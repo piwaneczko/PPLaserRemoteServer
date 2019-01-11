@@ -19,7 +19,7 @@ add_subdirectory(src)
 ############ Installation #############
 
 # Automatically install bin/msvcp140.dll and bin/vcruntime140.dll in ${CMAKE_INSTALL_PREFIX}
-include(InstallRequiredSystemLibraries)
+#include(InstallRequiredSystemLibraries)
 
 # Configuration of Inno Setup files
 if(WIN32)
@@ -30,7 +30,8 @@ else()
 message(STATUS "Using Inno Setup Compiler from: ${ISS_COMPILER}")
 
 # Add installer target
-add_custom_target(InnoSetup COMMAND ${ISS_COMPILER} "${CMAKE_CURRENT_SOURCE_DIR}/install.iss" VERBATIM)
+add_custom_target(InnoSetup COMMAND ${ISS_COMPILER} "${CMAKE_CURRENT_SOURCE_DIR}/install.iss" DEPENDS INSTALL VERBATIM)
+add_custom_command(TARGET InnoSetup POST_BUILD COMMAND "${CMAKE_INSTALL_PREFIX}/bin/SaveFileInfo.exe" "${CMAKE_INSTALL_PREFIX}/bin/Laser Remote Server Setup.exe")
 endif()
 endif() 
 

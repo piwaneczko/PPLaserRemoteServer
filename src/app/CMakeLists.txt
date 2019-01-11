@@ -25,7 +25,6 @@ set (RESOURCES resources/ppremote.rc
 
 ########### Group Sources #############
 
-source_group("Source" FILES ${SOURCES} ${HEADERS})
 source_group("Resources" FILES ${RESOURCES})
 
 #######################################
