@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <math.h>
 #include "XmlConfig.hpp"
+#include "resource.h"
 
 using namespace std;
 
@@ -52,18 +53,18 @@ XmlConfigValue<uint32_t> AutoHide("Autohide time (milliseconds)", 3000);
 static uint16_t CrcUpdate(uint16_t crc, uint8_t byte) {
     uint16_t h;
 
-    h = (uint8_t)(crc ^ byte);
-    h ^= (uint8_t)(uint16_t)(h << 4);
+    h = uint8_t(crc ^ byte);
+    h ^= uint8_t(uint16_t(h << 4));
     crc >>= 8;
-    crc ^= (uint16_t)(h << 8);
-    crc ^= (uint16_t)(h << 3);
-    crc ^= (uint16_t)(h >> 4);
+    crc ^= uint16_t(h << 8);
+    crc ^= uint16_t(h << 3);
+    crc ^= uint16_t(h >> 4);
     return crc;
 }
 
 LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (GetWindowLong(hWnd, GWL_USERDATA) != NULL) {
-        GUI &gui = *(GUI *)GetWindowLong(hWnd, GWL_USERDATA);
+    if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
+        auto &gui = *reinterpret_cast<GUI *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
         switch (msg) {
             case SWM_TRAYMSG:
                 switch (lParam) {
@@ -78,6 +79,8 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     case WM_RBUTTONDOWN:
                     case WM_CONTEXTMENU:
                         gui.ShowContextMenu(hWnd);
+                    default:
+                        break;
                 }
                 break;
             case WM_SYSCOMMAND:
@@ -100,6 +103,8 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         break;
                     case SWM_EXIT:
                         DestroyWindow(hWnd);
+                        break;
+                    default:
                         break;
                 }
                 return 1;
@@ -156,7 +161,7 @@ GUI::GUI()
 
     if (hWnd == nullptr) exit(1);
 
-    SetWindowLong(hWnd, GWL_USERDATA, (LONG)this);
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG)this);
 
     // Declare NOTIFYICONDATA details.
     // Error handling is omitted here for brevity. Do not omit it in your code.
@@ -418,7 +423,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                 L"Connected " + to_wstring(debugGoodCount) + L"/" + to_wstring(debugGoodCount + debugBadCount));
 #endif
         if (crc == CRC_VALID) {
-            clock_t eventReceived = clock();
+            const auto eventReceived = clock();
             // przetwarzanie danych tylko z pierwszego serwera
             switch (data[0]) {
                 case msg_type_button:
@@ -461,7 +466,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         case msg_key_type_zoom_in:
                             if (zoomCount == 1) {
                                 // duplicate
-                                long i = 0, res;
+                                long i = 0;
                                 DISPLAY_DEVICE dd;
                                 DEVMODE dm;
                                 ZeroMemory(&dd, sizeof(DISPLAY_DEVICE));
@@ -471,7 +476,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                                     dm.dmSize = sizeof(DEVMODE);
                                     if (EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm)) {
                                         dm.dmPosition.x = dm.dmPosition.y = 0;
-                                        res = ChangeDisplaySettingsEx(dd.DeviceName, &dm, 0, 0, 0);
+                                        ChangeDisplaySettingsEx(dd.DeviceName, &dm, 0, 0, 0);
                                     }
                                     i++;
                                     ZeroMemory(&dd, sizeof(DISPLAY_DEVICE));
@@ -614,6 +619,8 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         }
                     }
                     break;
+                default:
+                    break;
             }
             lastEventReceived = eventReceived;
         }
@@ -632,7 +639,7 @@ void GUI::Connected(const Server *server) {
 }
 void GUI::Disconnected(const Server *server) {
     serverMutex.lock();
-    auto server_it = find(connectedServers.begin(), connectedServers.end(), server);
+    const auto server_it = find(connectedServers.begin(), connectedServers.end(), server);
     if (server_it != connectedServers.end()) {
         connectedServers.erase(server_it);
     }
@@ -642,8 +649,8 @@ void GUI::Disconnected(const Server *server) {
     serverMutex.unlock();
 }
 
-uint16_t Server::GetDataLen(msg_type_t type) const {
-    uint16_t dlen = 0;
+uint16_t Server::GetDataLen(msg_type_t type) {
+    uint16_t dlen;
     switch (type) {
         case msg_type_gesture:
         case msg_type_wheel:

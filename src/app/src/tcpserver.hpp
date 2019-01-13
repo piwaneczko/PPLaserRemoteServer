@@ -1,6 +1,6 @@
 /**
  * \brief Nag³ówek klasy serwera TCP/IP
- * \file TCPServer.h
+ * \file TCPServer.hpp
  * \author Pawe³ Iwaneczko
  */
 

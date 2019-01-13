@@ -1,6 +1,6 @@
 /**
  * \brief Nag³ówek klasy interfejsu graficznego
- * \file GUI.h
+ * \file GUI.hpp
  * \author Pawe³ Iwaneczko
  */
 
@@ -11,12 +11,10 @@
 #include <Windows.h>
 #include <cstdint>
 #include <deque>
-#include <iostream>
 #include <mutex>
 #include <string>
 #include <thread>
 #include "UpdateDownloader.hpp"
-#include "resource.h"
 
 using namespace std;
 
@@ -43,7 +41,7 @@ enum server_type_en { stUnspecified, stBluetooth, stTCP };
 class Server {
 protected:
     server_type_en serverType = stUnspecified;
-    uint16_t GetDataLen(msg_type_t type) const;
+    static uint16_t GetDataLen(msg_type_t type);
 
 public:
     /**
@@ -110,7 +108,7 @@ public:
      *                       Aby nie wyœwietlaæ nale¿y ustawiæ ""
      * \param[in] iconFlag   Flaga ikony w powiadomieniu
      */
-    bool SetTrayIcon(int iconId, const wstring &info = L"", int nifIconFlag = NIIF_NONE);
+    bool SetTrayIcon(int iconId, const wstring &info = L"", int iconFlag = NIIF_NONE);
     /**
      * Ukrycie powiadomienia
      */
@@ -128,7 +126,7 @@ public:
      * \param[in] data WskaŸnik na bufor odebranych danych
      * \param[in] dataLen D³ugoœæ danych
      */
-    void ProcRecvData(const Server *server, uint8_t *buff, uint16_t dataLen);
+    void ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen);
     /**
      * Po³¹czenie klienta do serwera
      * \param[in] server WskaŸnik na serwer, do którego po³¹czy³ siê klient

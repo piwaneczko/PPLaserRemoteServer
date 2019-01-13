@@ -5,7 +5,7 @@
 #include <sstream>  // stringstream
 
 string GetFileName(string name) {
-    size_t ndx = name.find_last_of('\\');
+    const auto ndx = name.find_last_of('\\');
     if (ndx != name.npos) name = name.substr(ndx + 1);
     return name;
 }
@@ -28,11 +28,11 @@ Logger& Logger::GetInstance() {
 }
 
 void Logger::Log(const char* file, const char* func, int line) {
-    unique_lock<mutex> lock(locker);
+    lock_guard<mutex> lock(locker);
     this->file << clock() << " - " << GetFileName(file) << " - " << func << "(" << line << ")" << endl << flush;
 }
 
 void Logger::Log(const char* file, const char* func, int line, const string& text) {
-    unique_lock<mutex> lock(locker);
+    lock_guard<mutex> lock(locker);
     this->file << clock() << " - " << GetFileName(file) << " - " << func << "(" << line << ") - " << text << endl << flush;
 }

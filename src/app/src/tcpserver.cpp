@@ -9,6 +9,7 @@
 // TCPServer.hpp include need to be agter ws2tcpip
 #include "TCPServer.hpp"
 #include "XmlConfig.hpp"
+#include "resource.h"
 
 using namespace std;
 
@@ -18,22 +19,22 @@ XmlConfigValue<uint16_t> DefaultPort("TcpDefaultPort", 3389);
 
 bool CheckPortTCP(uint16_t dwPort) {
     sockaddr_in client;
-    SOCKET sock = INVALID_SOCKET;
-    bool result = false;
+    auto sock = INVALID_SOCKET;
+    auto result = false;
 
-    memset((void *)&client, 0, sizeof(client));  // czyszczenie pamiêci
+    memset(static_cast<void *>(&client), 0, sizeof(client));  // czyszczenie pamiêci
     client.sin_family = AF_INET;
     client.sin_port = htons(dwPort);
     client.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    sock = (int)socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sock = int(socket(PF_INET, SOCK_STREAM, IPPROTO_TCP));
 
     if (sock == INVALID_SOCKET) {  // nie udala sie inicjalizacja socketa
         printf("socket failed with error: %ld\n", WSAGetLastError());
     }
 
-    if (connect(sock, (struct sockaddr *)&client, sizeof(client)) == SOCKET_ERROR) {
-        int iResult = WSAGetLastError();
+    if (connect(sock, reinterpret_cast<sockaddr *>(&client), sizeof(client)) == SOCKET_ERROR) {
+        const auto iResult = WSAGetLastError();
         if (iResult == WSAECONNREFUSED) {
             result = true;
         } else
@@ -82,12 +83,12 @@ void TCPServer::ListenThread() {
     }
 
     sockaddr_in sockAddrTcpLocal = {0};
-    int sockAddrTcpLocalLen = sizeof(sockaddr_in);
+    const auto sockAddrTcpLocalLen = sizeof(sockaddr_in);
     sockAddrTcpLocal.sin_family = AF_INET;
     sockAddrTcpLocal.sin_addr.s_addr = inet_addr("0.0.0.0");
     sockAddrTcpLocal.sin_port = htons(port);
 
-    if (SOCKET_ERROR == ::bind(listenSocket, (struct sockaddr *)&sockAddrTcpLocal, sockAddrTcpLocalLen)) {
+    if (SOCKET_ERROR == ::bind(listenSocket, reinterpret_cast<sockaddr *>(&sockAddrTcpLocal), sockAddrTcpLocalLen)) {
         gui.SetText(IDC_TCP_SERVER_STATUS, L"bind Error!");
         closesocket(listenSocket);
         listenSocket = INVALID_SOCKET;
@@ -105,12 +106,11 @@ void TCPServer::ListenThread() {
 
     uint16_t offs = 0, len = 0, dlen = 0;
     uint8_t buff[RECV_BUFF_MAX_LEN] = {0};
-    int recvResult = 0;
+    auto recvResult = 0;
     clientSocket = INVALID_SOCKET;
     sockaddr_in clientAddr = {0};
     int clientAddrLen = sizeof(sockaddr_in);
 
-    int numReady;
     FD_SET fdrecv, listenfd;
     timeval timeout = {0, 10000};         // 10ms
     timeval listenTimeout = {0, 200000};  // 200Ms
@@ -124,7 +124,7 @@ void TCPServer::ListenThread() {
 
         FD_ZERO(&listenfd);
         FD_SET(listenSocket, &listenfd);
-        numReady = select(0, &listenfd, nullptr, nullptr, &listenTimeout);
+        auto numReady = select(0, &listenfd, nullptr, nullptr, &listenTimeout);
         if (FD_ISSET(listenSocket, &listenfd) && numReady) {
             clientAddr = {0};
             clientAddrLen = sizeof(sockaddr_in);

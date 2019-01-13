@@ -1,6 +1,6 @@
 /**
  * \brief Nag³ówek klasy serwera bluetooth
- * \file BluetoothServer.h
+ * \file BluetoothServer.hpp
  * \author Pawe³ Iwaneczko
  */
 
