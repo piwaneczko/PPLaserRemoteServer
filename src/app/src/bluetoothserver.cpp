@@ -33,6 +33,7 @@ BluetoothServer::~BluetoothServer() {
         listenThread.join();
     }
 }
+
 wstring BthAddrToName(const SOCKADDR_BTH &remoteBthAddr) {
     auto iResult = 0;
     const uint32_t flags = LUP_CONTAINERS | LUP_RETURN_NAME | LUP_RETURN_ADDR;
@@ -199,16 +200,6 @@ void BluetoothServer::ListenThread() {
         gui.SetText(IDC_BTH_CLIENT_NAME, clientName);
         gui.Connected(this);
 
-        // wysy³¹nie wersji softu
-        file_version_t ver;
-        if (UpdateDownloader::GetFileVersion(ver)) {
-            buff[0] = msg_type_version;
-            buff[1] = uint8_t((ver.major & 0xFF00) >> 8);
-            buff[2] = uint8_t((ver.major & 0x00FF));
-            buff[3] = uint8_t((ver.minor & 0xFF00) >> 8);
-            buff[4] = uint8_t((ver.minor & 0x00FF));
-            send(clientSocket, reinterpret_cast<const char *>(buff), 5, 0);
-        }
         while (listenThreadIsRunning) {
             FD_ZERO(&fdrecv);
             FD_SET(clientSocket, &fdrecv);
@@ -220,7 +211,7 @@ void BluetoothServer::ListenThread() {
             {
                 uint16_t offs = 0;
                 if (len >= RECV_BUFF_MAX_LEN) len = 0;
-                recvResult = recv(clientSocket, reinterpret_cast<char *>(buff) + len, RECV_BUFF_MAX_LEN - len, 0);
+                recvResult = recv(clientSocket, reinterpret_cast<char *>(buff + len), RECV_BUFF_MAX_LEN - len, 0);
 
                 if (recvResult == 0) {  // socket connection has been closed gracefully
                     gui.SetText(IDC_BTH_SERVER_STATUS, L"Device connection was lost!");
@@ -243,6 +234,14 @@ void BluetoothServer::ListenThread() {
                     if (len > 0) {
                         memcpy(&buff[0], &buff[offs], len);
                     }
+                }
+            } else {
+                while (!gui.dataToSend.empty()) {
+                    gui.sendLocker.lock();
+                    const auto data = gui.dataToSend.front();
+                    gui.dataToSend.pop_front();
+                    gui.sendLocker.unlock();
+                    send(clientSocket, reinterpret_cast<const char *>(data.data()), data.size(), 0);
                 }
             }
         }

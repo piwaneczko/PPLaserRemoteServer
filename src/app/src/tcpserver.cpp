@@ -65,6 +65,7 @@ TCPServer::~TCPServer() {
         listenThread.join();
     }
 }
+
 void TCPServer::ListenThread() {
     WSAData wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData)) {
@@ -129,7 +130,7 @@ void TCPServer::ListenThread() {
             clientAddr = {0};
             clientAddrLen = sizeof(sockaddr_in);
             ZeroMemory(&clientAddr, sizeof(clientAddr));
-            clientSocket = accept(listenSocket, (struct sockaddr *)&clientAddr, &clientAddrLen);
+            clientSocket = accept(listenSocket, reinterpret_cast<sockaddr *>(&clientAddr), &clientAddrLen);
             if (INVALID_SOCKET == clientSocket) {
                 if (listenThreadIsRunning) {
                     gui.SetText(IDC_TCP_SERVER_STATUS, L"accept Error!", GUI::wsShow);
@@ -146,16 +147,6 @@ void TCPServer::ListenThread() {
             gui.SetText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
             gui.Connected(this);
 
-            // wysy³¹nie wersji softu
-            file_version_t ver;
-            if (UpdateDownloader::GetFileVersion(ver)) {
-                buff[0] = msg_type_version;
-                buff[1] = (uint8_t)((ver.major & 0xFF00) >> 8);
-                buff[2] = (uint8_t)((ver.major & 0x00FF));
-                buff[3] = (uint8_t)((ver.minor & 0xFF00) >> 8);
-                buff[4] = (uint8_t)((ver.minor & 0x00FF));
-                send(clientSocket, (const char *)buff, 5, 0);
-            }
             while (listenThreadIsRunning) {
                 FD_ZERO(&fdrecv);
                 FD_SET(clientSocket, &fdrecv);
@@ -167,7 +158,7 @@ void TCPServer::ListenThread() {
                 {
                     offs = 0;
                     if (len >= RECV_BUFF_MAX_LEN) len = 0;
-                    recvResult = recv(clientSocket, (char *)buff + len, RECV_BUFF_MAX_LEN - len, 0);
+                    recvResult = recv(clientSocket, reinterpret_cast<char *>(buff + len), RECV_BUFF_MAX_LEN - len, 0);
                     if (recvResult == 0) {  // socket connection has been closed gracefully
                         gui.SetText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
                         break;  // Break out of the for loop
@@ -189,6 +180,14 @@ void TCPServer::ListenThread() {
                         if (len > 0) {
                             memcpy(&buff[0], &buff[offs], len);
                         }
+                    }
+                } else {
+                    while (!gui.dataToSend.empty()) {
+                        gui.sendLocker.lock();
+                        const auto data = gui.dataToSend.front();
+                        gui.dataToSend.pop_front();
+                        gui.sendLocker.unlock();
+                        send(clientSocket, reinterpret_cast<const char *>(data.data()), data.size(), 0);
                     }
                 }
             }

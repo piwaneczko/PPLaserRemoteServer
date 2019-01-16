@@ -7,7 +7,10 @@
 #include "GUI.hpp"
 #include <ShObjIdl.h>
 #include <assert.h>
+#include <audiopolicy.h>
+#include <endpointvolume.h>
 #include <math.h>
+#include <mmdeviceapi.h>
 #include "XmlConfig.hpp"
 #include "resource.h"
 
@@ -51,9 +54,7 @@ XmlConfigValue<uint32_t> AutoHide("Autohide time (milliseconds)", 3000);
  * \return Nowa wartoœæ sumy kontrolnej
  */
 static uint16_t CrcUpdate(uint16_t crc, uint8_t byte) {
-    uint16_t h;
-
-    h = uint8_t(crc ^ byte);
+    uint16_t h = uint8_t(crc ^ byte);
     h ^= uint8_t(uint16_t(h << 4));
     crc >>= 8;
     crc ^= uint16_t(h << 8);
@@ -135,12 +136,11 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
-    GUI *gui;
     // uzyskanie wskaŸnika na glemm
-    gui = (GUI *)dwData;
+    auto gui = reinterpret_cast<GUI *>(dwData);
 
     if (gui != nullptr) {
-        ScrrenRect rect = {lprcMonitor->left, lprcMonitor->top, lprcMonitor->right - lprcMonitor->left, lprcMonitor->bottom - lprcMonitor->top};
+        const ScrrenRect rect = {lprcMonitor->left, lprcMonitor->top, lprcMonitor->right - lprcMonitor->left, lprcMonitor->bottom - lprcMonitor->top};
         gui->screens.push_back(rect);
     }
 
@@ -150,18 +150,20 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMoni
 GUI::GUI()
     : downloader(L"https://docs.google.com/uc?authuser=0&id=0B-WV4mqjX8JgSUJkN0ptWWxSMmc&export=download",
                  L"https://docs.google.com/uc?id=0B-WV4mqjX8JgQTVTcXNmWXRkaEE&export=download"),
+      zoomCount(1),
       hidden(),
-      zoomCount(1) {
-    hInstance = GetModuleHandle(0);
-    hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), nullptr, (DLGPROC)DlgProc);
+      audioVolume(this),
+      volume_(audioVolume.volume()) {
+    hInstance = GetModuleHandle(nullptr);
+    hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), nullptr, DLGPROC(DlgProc));
 
-    HICON hIcon = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE);
-    SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-    SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+    auto hIcon = HICON(LoadImage(hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE));
+    SendMessage(hWnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
+    SendMessage(hWnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
 
     if (hWnd == nullptr) exit(1);
 
-    SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG)this);
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, LONG(this));
 
     // Declare NOTIFYICONDATA details.
     // Error handling is omitted here for brevity. Do not omit it in your code.
@@ -170,8 +172,8 @@ GUI::GUI()
     niData.hWnd = hWnd;
     niData.uVersion = NOTIFYICON_VERSION_4;
     niData.uFlags = NIF_ICON | NIF_TIP | NIF_INFO | NIF_MESSAGE;
-    niData.hIcon = (HICON)LoadImage(
-        hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR);
+    niData.hIcon = HICON(LoadImage(
+        hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
     niData.uCallbackMessage = SWM_TRAYMSG;
 
     // This text will be shown as the icon's tip.
@@ -186,7 +188,7 @@ GUI::GUI()
     UpdateWindow(hWnd);
 
     // utworzenie okien na ka¿dym monitorze
-    EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, (LPARAM)this);
+    EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, LPARAM(this));
     assert(screens.size() > 0);
     lastEventReceived = 0;
     downloadThread = thread(&GUI::DownloadThread, this);
@@ -221,17 +223,17 @@ void ChangeUpdateGroupVisibility(HWND hWnd, bool visible) {
     ShowWindow(GetDlgItem(hWnd, IDC_TCP_CLIENT_IP), visible ? SW_HIDE : SW_SHOW);
 }
 void OnUpdateProgress(float value, void *user) {
-    HWND &hWnd = *(HWND *)user;
-    HWND text = GetDlgItem(hWnd, IDC_DOWNLOAD_TEXT);
-    HWND bar = GetDlgItem(hWnd, IDC_DOWNLOAD_BAR);
+    auto &hWnd = *static_cast<HWND *>(user);
+    const auto text = GetDlgItem(hWnd, IDC_DOWNLOAD_TEXT);
+    const auto bar = GetDlgItem(hWnd, IDC_DOWNLOAD_BAR);
     if (text != nullptr && bar != nullptr) {
-        int intValue = value * 100;
-        SendMessage(text, WM_SETTEXT, 0, (LPARAM)(L"Downloading: " + to_wstring(intValue) + L"%").c_str());
-        SendMessage(bar, PBM_SETPOS, (WPARAM)intValue, 0);
+        const int intValue = value * 100;
+        SendMessage(text, WM_SETTEXT, 0, LPARAM((L"Downloading: " + to_wstring(intValue) + L"%").c_str()));
+        SendMessage(bar, PBM_SETPOS, WPARAM(intValue), 0);
     }
 }
 void GUI::DownloadThread() {
-    wstring version = downloader.CheckVersion(UD_CHECK_BASE);
+    auto version = downloader.CheckVersion(UD_CHECK_BASE);
     if (!version.empty()) {
         KillTimer(hWnd, ID_TIMER);
         if (MessageBox(nullptr,
@@ -243,7 +245,7 @@ void GUI::DownloadThread() {
             ShowWindow(hWnd, SW_SHOWDEFAULT);
             UpdateWindow(hWnd);
             SetTrayIcon(IDI_UPDATE, L"Downloading started!", NIIF_INFO);
-            int result = downloader.DownloadAndUpdate(&OnUpdateProgress, (void *)&hWnd, TempDirectory);
+            const auto result = downloader.DownloadAndUpdate(&OnUpdateProgress, static_cast<void *>(&hWnd), TempDirectory);
             switch (result) {
                 case S_OK:
                     SetTrayIcon(IDI_UPDATE, L"Downloading ended!", NIIF_INFO);
@@ -264,10 +266,10 @@ void GUI::DownloadThread() {
     }
 }
 
-void GUI::ShowContextMenu(HWND hWnd) {
+void GUI::ShowContextMenu(const HWND hWnd) {
     POINT pt;
     GetCursorPos(&pt);
-    HMENU hMenu = CreatePopupMenu();
+    const auto hMenu = CreatePopupMenu();
     if (hMenu) {
         if (IsWindowVisible(hWnd))
             InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_HIDE, L"Hide");
@@ -283,6 +285,7 @@ void GUI::ShowContextMenu(HWND hWnd) {
         DestroyMenu(hMenu);
     }
 }
+
 GUI &GUI::GetInstance() {
     static GUI gui;
     return gui;
@@ -299,14 +302,14 @@ bool GUI::SetTrayIcon(int iconId, const wstring &info, int nifIconFlag) {
     // This text will be shown as the icon's info.
     wsprintf(niData.szInfo, info.c_str());
     if (IDI_LASER_ICON <= iconId && iconId <= IDI_UPDATE) {
-        niData.hIcon = (HICON)LoadImage(
-            hInstance, MAKEINTRESOURCE(iconId), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR);
+        niData.hIcon = HICON(
+            LoadImage(hInstance, MAKEINTRESOURCE(iconId), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
     }
     niData.uFlags = NIF_ICON | (ShowNotification ? (NIF_TIP | NIF_INFO | NIF_MESSAGE) : 0);
     niData.dwInfoFlags = (SoundNotification ? 0 : NIIF_NOSOUND) | nifIconFlag;
 
     // Show the notification.;
-    bool result = (Shell_NotifyIcon(hidden ? NIM_ADD : NIM_MODIFY, &niData) == TRUE);
+    const auto result = (Shell_NotifyIcon(hidden ? NIM_ADD : NIM_MODIFY, &niData) == TRUE);
     // free icon handle
     if (niData.hIcon && DestroyIcon(niData.hIcon)) niData.hIcon = nullptr;
 
@@ -318,9 +321,9 @@ bool GUI::HideTrayIcon() {
     hidden = (Shell_NotifyIcon(NIM_DELETE, &niData) == TRUE);
     return hidden;
 }
-bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) {
-    HWND textBox = GetDlgItem(hWnd, textBoxId);
-    int result = TRUE;
+bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) const {
+    const auto textBox = GetDlgItem(hWnd, textBoxId);
+    auto result = TRUE;
     switch (windowState) {
         case GUI::wsShow:
             ShowWindow(hWnd, SW_SHOWDEFAULT);
@@ -334,14 +337,8 @@ bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) 
         default:
             break;
     }
-    result &= SendMessage(textBox, WM_SETTEXT, 0, (LPARAM)text.c_str());
+    result &= SendMessage(textBox, WM_SETTEXT, 0, LPARAM(text.c_str()));
     return (result == TRUE);
-}
-string ws2s(const wstring &ws) {
-    int size_needed = WideCharToMultiByte(CP_ACP, 0, ws.c_str(), (int)ws.size(), nullptr, 0, nullptr, nullptr);
-    std::string strTo(size_needed, 0);
-    WideCharToMultiByte(CP_ACP, 0, ws.c_str(), (int)ws.size(), &strTo[0], size_needed, nullptr, nullptr);
-    return strTo;
 }
 
 BOOL CALLBACK KillScreenSaverFunc(HWND hwnd, LPARAM lParam) {
@@ -351,8 +348,7 @@ BOOL CALLBACK KillScreenSaverFunc(HWND hwnd, LPARAM lParam) {
 void KillScreenSaver() {
     BOOL isRunning;
     if (SystemParametersInfo(SPI_GETSCREENSAVERRUNNING, NULL, &isRunning, NULL) && (isRunning == TRUE)) {
-        HDESK hdesk;
-        hdesk = OpenDesktop(TEXT("Screen-saver"), 0, FALSE, DESKTOP_READOBJECTS | DESKTOP_WRITEOBJECTS);
+        const auto hdesk = OpenDesktop(TEXT("Screen-saver"), 0, FALSE, DESKTOP_READOBJECTS | DESKTOP_WRITEOBJECTS);
         if (hdesk) {
             EnumDesktopWindows(hdesk, KillScreenSaverFunc, 0);
             CloseDesktop(hdesk);
@@ -409,6 +405,19 @@ void mouse_event(uint16_t flag, int32_t dx = 0, int32_t dy = 0) {
     KillScreenSaver();
 }
 
+void GUI::VolumeChanged(float volume) {
+    volume_ = volume;
+    sendCurrentVolume();
+}
+
+void GUI::sendCurrentVolume() {
+    lock_guard<mutex> lock(sendLocker);
+    dataToSend.emplace_back(vector<uint8_t>(2));
+    auto &dataVec = dataToSend.back();
+    dataVec[0] = uint8_t(msg_type_volume);
+    dataVec[1] = uint8_t(volume_);
+}
+
 void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
     // serverMutex.lock();
     if (connectedServers.size() > 0 && connectedServers.front() == server && dataLen >= 2) {
@@ -457,12 +466,14 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         case msg_key_type_right_up:
                             mouse_event(MOUSEEVENTF_RIGHTUP);
                             break;
-                        case msg_key_type_volume_down:
+                        case msg_key_type_volume_down: {
                             keybd_event(VK_VOLUME_DOWN);
-                            break;
-                        case msg_key_type_volume_up:
+                            if (volume_ < 1.0f) sendCurrentVolume();
+                        } break;
+                        case msg_key_type_volume_up: {
                             keybd_event(VK_VOLUME_UP);
-                            break;
+                            if (volume_ > 99.0f) sendCurrentVolume();
+                        } break;
                         case msg_key_type_zoom_in:
                             if (zoomCount == 1) {
                                 // duplicate
@@ -471,12 +482,12 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                                 DEVMODE dm;
                                 ZeroMemory(&dd, sizeof(DISPLAY_DEVICE));
                                 dd.cb = sizeof(DISPLAY_DEVICE);
-                                while (EnumDisplayDevices(0, i, &dd, 0)) {
+                                while (EnumDisplayDevices(nullptr, i, &dd, 0)) {
                                     ZeroMemory(&dm, sizeof(DEVMODE));
                                     dm.dmSize = sizeof(DEVMODE);
                                     if (EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm)) {
                                         dm.dmPosition.x = dm.dmPosition.y = 0;
-                                        ChangeDisplaySettingsEx(dd.DeviceName, &dm, 0, 0, 0);
+                                        ChangeDisplaySettingsEx(dd.DeviceName, &dm, nullptr, 0, nullptr);
                                     }
                                     i++;
                                     ZeroMemory(&dd, sizeof(DISPLAY_DEVICE));
@@ -551,7 +562,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                     if (dataLen == 5) {
                         wchar_t keyCode = 0;
                         memcpy(&keyCode, &data[1], sizeof(wchar_t));
-                        uint8_t byteKeyCode = (uint8_t)VkKeyScan(keyCode);
+                        const auto byteKeyCode = uint8_t(VkKeyScan(keyCode));
                         switch (byteKeyCode) {
                             case VK_BACK:
                             case VK_TAB:

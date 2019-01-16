@@ -6,11 +6,13 @@ set (SOURCES src/bluetoothserver.cpp
              src/tcpserver.cpp
              src/logger.cpp
              src/gui.cpp
+             src/audiovolume.cpp
              src/main.cpp)
 set (HEADERS src/bluetoothserver.hpp
              src/tcpserver.hpp
              src/logger.hpp
              src/gui.hpp
+             src/audiovolume.hpp
              src/resource.h)
 set (RESOURCES resources/ppremote.rc
                resources/bluetooth.ico

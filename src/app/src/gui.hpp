@@ -14,7 +14,9 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 #include "UpdateDownloader.hpp"
+#include "audiovolume.hpp"
 
 using namespace std;
 
@@ -29,7 +31,7 @@ enum msg_type_t {
     msg_type_gesture = 2,  /*!< Gest myszk¹ */
     msg_type_gyro = 3,     /*!< ¯yroskop    */
     msg_type_keyboard = 4, /*!< Klawisz     */
-    msg_type_version = 5,  /*!< Wersja      */
+    msg_type_volume = 5,   /*!< G³oœnoœæ    */
     msg_type_wheel = 6     /*!< Rolka myszy */
 };
 
@@ -44,6 +46,7 @@ protected:
     static uint16_t GetDataLen(msg_type_t type);
 
 public:
+    virtual ~Server() = default;
     /**
      * Pobranie pola serverType
      * \return Pole serverType
@@ -78,11 +81,20 @@ private:
     NOTIFYICONDATA niData;
     friend LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     friend BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
-    void ShowContextMenu(HWND hWnd);
+    static void ShowContextMenu(HWND hWnd);
     // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
     GUI();
     // Destruktor - usuwa ikonê systemow¹
     ~GUI();
+
+    // Volume control
+    AudioVolume audioVolume;
+    float volume_;
+    friend class BluetoothServer;
+    friend class TCPServer;
+    deque<vector<uint8_t>> dataToSend;
+    mutex sendLocker;
+    void sendCurrentVolume();
 
 public:
     /* Lista wyliczeniowa stau okna */
@@ -100,7 +112,7 @@ public:
     /**
      * Pêtla g³ówna przetwarzaj¹ca komunikaty systemowe. Koñczy siê po zamkniêciu aplikacji
      */
-    void MainLoop();
+    static void MainLoop();
     /**
      * Modyfikacja obrazu oraz tekstu informacyjnego ikony w pasku systemowym
      * \param[in] iconId     Identyfikator ikony. Wartoœci od 101 do 105
@@ -119,7 +131,7 @@ public:
      * \param[in] text Text pola tekstowego
      * \param[in] windowState Stan okna
      */
-    bool SetText(int textBoxId, const wstring &text, window_state windowState = wsDefault);
+    bool SetText(int textBoxId, const wstring &text, window_state windowState = wsDefault) const;
     /**
      * Przetworzenie danych od zdalnego klienta
      * \param[in] server WskaŸnik na serwer, który chce przetworzyæ dane (Mo¿e to zrobiæ tylko jeden z dwóch)
@@ -137,6 +149,12 @@ public:
      * \param[in] server WskaŸnik na serwer, z którego ro³¹czy³ siê klient
      */
     void Disconnected(const Server *server);
+
+    /**
+     * \brief Volume changed event occured
+     * \param volume Audio Volume 0-100
+     */
+    void VolumeChanged(float volume);
 };
 
 #endif /* IG_GUI_H */
