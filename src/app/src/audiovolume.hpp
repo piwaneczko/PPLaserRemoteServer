@@ -5,7 +5,7 @@
 #include <endpointvolume.h>
 #include <mmdeviceapi.h>
 
-class GUI;
+class Gui;
 
 /**
  * Client implementation of IAudioEndpointVolumeCallback
@@ -16,30 +16,30 @@ class GUI;
  */
 class AudioVolumeCallback : public IAudioEndpointVolumeCallback {
     LONG cRef_;
-    GUI &gui_;
+    Gui &gui_;
 
     friend class AudioVolume;
     GUID guid;
 
 public:
-    AudioVolumeCallback(GUI &gui);
+    explicit AudioVolumeCallback(Gui &gui);
     virtual ~AudioVolumeCallback();
-    ULONG STDMETHODCALLTYPE AddRef();
+    ULONG STDMETHODCALLTYPE AddRef() override;
 
-    ULONG STDMETHODCALLTYPE Release();
+    ULONG STDMETHODCALLTYPE Release() override;
 
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, VOID **ppvInterface);
-    HRESULT STDMETHODCALLTYPE OnNotify(PAUDIO_VOLUME_NOTIFICATION_DATA pNotify);
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, VOID **ppvInterface) override;
+    HRESULT STDMETHODCALLTYPE OnNotify(PAUDIO_VOLUME_NOTIFICATION_DATA pNotify) override;
 };
 class AudioVolume {
-    GUI *gui_;
+    Gui *gui_;
     AudioVolumeCallback callback_;
     IMMDeviceEnumerator *enumerator = nullptr;
     IMMDevice *device = nullptr;
     IAudioEndpointVolume *endptVol = nullptr;
 
 public:
-    explicit AudioVolume(GUI *gui);
+    explicit AudioVolume(Gui *gui);
     ~AudioVolume();
 
     float volume() const;

@@ -15,20 +15,16 @@
  * Klasa serwera TCP/IP
  */
 class TCPServer : public Server {
-private:
-    GUI &gui;
-    thread listenThread;
-    uint32_t listenSocket, clientSocket;
-    bool listenThreadIsRunning;
-    void ListenThread();
-    void SetServerIPs(uint16_t port);
+    uint16_t port;
+    void mainLoop() override;
+    void setServerIPs(uint16_t port);
 
 public:
     /**
      * Konstruktor klasy serwera TCP/IP
      * \param[in] gui Referencja na intefrejs graficzny
      */
-    TCPServer(GUI &gui);
+    explicit TCPServer(Gui &gui);
     /* Destruktor klasy */
     ~TCPServer();
 };

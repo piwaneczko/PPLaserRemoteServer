@@ -15,16 +15,16 @@ using namespace std;
 
 #define RECV_BUFF_MAX_LEN 22 /**< Maksymalny rozmiar bufora odebranych danych */
 
-XmlConfigValue<uint16_t> DefaultPort("TcpDefaultPort", 3389);
+XmlConfigValue<uint16_t, XmlConfigReadWriteFlag> DefaultPort("TcpDefaultPort", 3389);
 
-bool CheckPortTCP(uint16_t dwPort) {
+bool checkPortTcp(uint16_t port) {
     sockaddr_in client;
     auto sock = INVALID_SOCKET;
     auto result = false;
 
     memset(static_cast<void *>(&client), 0, sizeof(client));  // czyszczenie pamiêci
     client.sin_family = AF_INET;
-    client.sin_port = htons(dwPort);
+    client.sin_port = htons(port);
     client.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     sock = int(socket(PF_INET, SOCK_STREAM, IPPROTO_TCP));
@@ -37,8 +37,9 @@ bool CheckPortTCP(uint16_t dwPort) {
         const auto iResult = WSAGetLastError();
         if (iResult == WSAECONNREFUSED) {
             result = true;
-        } else
-            printf("connect to port %d failed with error: %d\n", dwPort, WSAGetLastError());
+        } else {
+            throw exception(("connect to port " + to_string(port) + " failed with error: " + to_string(iResult)).c_str());
+        }
     }
 
     closesocket(sock);
@@ -46,14 +47,48 @@ bool CheckPortTCP(uint16_t dwPort) {
     return result;
 }
 
-TCPServer::TCPServer(GUI &gui) : gui(gui), listenThreadIsRunning(), listenSocket(INVALID_SOCKET), clientSocket(INVALID_SOCKET) {
+TCPServer::TCPServer(Gui &gui) : Server(gui) {
     serverType = stTCP;
-    gui.SetText(IDC_TCP_SERVER_STATUS, L"Initialization...");
-    listenThread = thread(&TCPServer::ListenThread, this);
+    gui.setText(IDC_TCP_SERVER_STATUS, L"Initialization...");
+
+    WSAData wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData)) {
+        gui.setText(IDC_TCP_SERVER_STATUS, L"WSAStartup error!", Gui::wsShow);
+    }
+
+    uint16_t port = DefaultPort;
+    try {
+        while (!checkPortTcp(port)) port++;
+    } catch (const exception &e) {
+        gui.setText(IDC_TCP_SERVER_STATUS, s2ws(e.what()).c_str(), Gui::wsShow);
+    }
+    this->port = port;
+
+    listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listenSocket == INVALID_SOCKET) {
+        gui.setText(IDC_TCP_SERVER_STATUS, L"socket Error!", Gui::wsShow);
+    } else {
+        sockaddr_in sockAddrTcpLocal = {0};
+        const auto sockAddrTcpLocalLen = sizeof(sockaddr_in);
+        sockAddrTcpLocal.sin_family = AF_INET;
+        sockAddrTcpLocal.sin_addr.s_addr = inet_addr("0.0.0.0");
+        sockAddrTcpLocal.sin_port = htons(port);
+
+        if (SOCKET_ERROR == ::bind(listenSocket, reinterpret_cast<sockaddr *>(&sockAddrTcpLocal), sockAddrTcpLocalLen)) {
+            gui.setText(IDC_TCP_SERVER_STATUS, L"bind Error!");
+            closesocket(listenSocket);
+            listenSocket = INVALID_SOCKET;
+        } else if (SOCKET_ERROR == listen(listenSocket, SOMAXCONN)) {
+            gui.setText(IDC_TCP_SERVER_STATUS, L"listen Error!", Gui::wsShow);
+            closesocket(listenSocket);
+            listenSocket = INVALID_SOCKET;
+        } else
+            listenThread = thread(&TCPServer::mainLoop, this);
+    }
 }
 TCPServer::~TCPServer() {
-    if (listenThreadIsRunning) {
-        listenThreadIsRunning = false;
+    if (mainLoopIsRunning) {
+        mainLoopIsRunning = false;
         if (clientSocket != INVALID_SOCKET) {
             closesocket(clientSocket);
             clientSocket = INVALID_SOCKET;
@@ -66,45 +101,7 @@ TCPServer::~TCPServer() {
     }
 }
 
-void TCPServer::ListenThread() {
-    WSAData wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData)) {
-        gui.SetText(IDC_TCP_SERVER_STATUS, L"WSAStartup error!", GUI::wsShow);
-        return;
-    }
-
-    uint16_t port = DefaultPort;
-    while (!CheckPortTCP(port)) port++;
-
-    listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listenSocket == INVALID_SOCKET) {
-        gui.SetText(IDC_TCP_SERVER_STATUS, L"socket Error!", GUI::wsShow);
-        listenThread.detach();
-        return;
-    }
-
-    sockaddr_in sockAddrTcpLocal = {0};
-    const auto sockAddrTcpLocalLen = sizeof(sockaddr_in);
-    sockAddrTcpLocal.sin_family = AF_INET;
-    sockAddrTcpLocal.sin_addr.s_addr = inet_addr("0.0.0.0");
-    sockAddrTcpLocal.sin_port = htons(port);
-
-    if (SOCKET_ERROR == ::bind(listenSocket, reinterpret_cast<sockaddr *>(&sockAddrTcpLocal), sockAddrTcpLocalLen)) {
-        gui.SetText(IDC_TCP_SERVER_STATUS, L"bind Error!");
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
-        listenThread.detach();
-        return;
-    }
-
-    if (SOCKET_ERROR == listen(listenSocket, SOMAXCONN)) {
-        gui.SetText(IDC_TCP_SERVER_STATUS, L"listen Error!", GUI::wsShow);
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
-        listenThread.detach();
-        return;
-    }
-
+void TCPServer::mainLoop() {
     uint16_t offs = 0, len = 0, dlen = 0;
     uint8_t buff[RECV_BUFF_MAX_LEN] = {0};
     auto recvResult = 0;
@@ -112,90 +109,96 @@ void TCPServer::ListenThread() {
     sockaddr_in clientAddr = {0};
     int clientAddrLen = sizeof(sockaddr_in);
 
-    FD_SET fdrecv, listenfd;
-    timeval timeout = {0, 10000};         // 10ms
-    timeval listenTimeout = {0, 200000};  // 200Ms
+    FD_SET fdrecv;
+    timeval timeout = {0, 10000};  // 10ms
 
-    listenThreadIsRunning = true;
-    gui.SetText(IDC_TCP_CLIENT_IP, L"None", GUI::wsTimedHide);
-    while (listenThreadIsRunning) {
-        SetServerIPs(port);
-        gui.SetText(IDC_TCP_CLIENT_IP, L"None");
-        gui.SetText(IDC_TCP_SERVER_STATUS, L"Listening...");
+    if (DefaultPort() != port) {
+        if (MessageBox(nullptr,
+                       (L"TCP port " + to_wstring(DefaultPort())
+                        + L" is used by other program.\n"
+                          L"Do you want to store currently TCP port "
+                        + to_wstring(port) + L" in settings?")
+                           .c_str(),
+                       L"TCP port is used by other program",
+                       MB_ICONQUESTION | MB_YESNO)
+            == IDYES)
+            DefaultPort = port;
+    }
 
-        FD_ZERO(&listenfd);
-        FD_SET(listenSocket, &listenfd);
-        auto numReady = select(0, &listenfd, nullptr, nullptr, &listenTimeout);
-        if (FD_ISSET(listenSocket, &listenfd) && numReady) {
-            clientAddr = {0};
-            clientAddrLen = sizeof(sockaddr_in);
-            ZeroMemory(&clientAddr, sizeof(clientAddr));
-            clientSocket = accept(listenSocket, reinterpret_cast<sockaddr *>(&clientAddr), &clientAddrLen);
-            if (INVALID_SOCKET == clientSocket) {
-                if (listenThreadIsRunning) {
-                    gui.SetText(IDC_TCP_SERVER_STATUS, L"accept Error!", GUI::wsShow);
-                    closesocket(listenSocket);
-                    listenSocket = INVALID_SOCKET;
+    gui.setText(IDC_TCP_CLIENT_IP, L"None", Gui::wsTimedHide);
+    mainLoopIsRunning = true;
+    while (mainLoopIsRunning) {
+        setServerIPs(port);
+        gui.setText(IDC_TCP_CLIENT_IP, L"None");
+        gui.setText(IDC_TCP_SERVER_STATUS, L"Listening...");
+
+        clientAddr = {0};
+        clientAddrLen = sizeof(sockaddr_in);
+        ZeroMemory(&clientAddr, sizeof(clientAddr));
+        clientSocket = accept(listenSocket, reinterpret_cast<sockaddr *>(&clientAddr), &clientAddrLen);
+        if (INVALID_SOCKET == clientSocket) {
+            if (mainLoopIsRunning) {
+                gui.setText(IDC_TCP_SERVER_STATUS, L"accept Error!", Gui::wsShow);
+                closesocket(listenSocket);
+                listenSocket = INVALID_SOCKET;
+            } else {
+                gui.setText(IDC_TCP_SERVER_STATUS, L"Ending listening", Gui::wsShow);
+            }
+            break;  // Break out of the for loop
+        }
+
+        gui.setText(IDC_TCP_SERVER_STATUS, L"Connected");
+
+        char ipBuf[INET_ADDRSTRLEN];
+        string clientIP = inet_ntop(AF_INET, &clientAddr.sin_addr, ipBuf, sizeof(ipBuf));
+        gui.setText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
+        gui.connected(this);
+
+        while (mainLoopIsRunning) {
+            FD_ZERO(&fdrecv);
+            FD_SET(clientSocket, &fdrecv);
+            const auto numReady = select(0, &fdrecv, nullptr, nullptr, &timeout);
+            if (numReady < 0) {
+                gui.setText(IDC_TCP_SERVER_STATUS, L"recv Error!", Gui::wsShow);
+                break;
+            } else if (numReady > 0 && FD_ISSET(clientSocket, &fdrecv) != 0)  // jest cos do odczytania
+            {
+                offs = 0;
+                if (len >= RECV_BUFF_MAX_LEN) len = 0;
+                recvResult = recv(clientSocket, reinterpret_cast<char *>(buff + len), RECV_BUFF_MAX_LEN - len, 0);
+                if (recvResult == 0) {  // socket connection has been closed gracefully
+                    gui.setText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
+                    break;  // Break out of the for loop
+                } else if (recvResult == SOCKET_ERROR) {
+                    gui.setText(IDC_TCP_SERVER_STATUS, L"recv Error!", Gui::wsShow);
+                    break;  // Break out of the for loop
                 } else {
-                    gui.SetText(IDC_TCP_SERVER_STATUS, L"Ending listening", GUI::wsShow);
-                }
-                break;  // Break out of the for loop
-            }
+                    len += recvResult;
+                    // odebrano dane - dzielenie przetwarzanie
+                    while (len >= 4) {
+                        dlen = getDataLen((msg_type_t)buff[offs]);
 
-            gui.SetText(IDC_TCP_SERVER_STATUS, L"Connected");
-            string clientIP = inet_ntoa(clientAddr.sin_addr);
-            gui.SetText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
-            gui.Connected(this);
+                        if (dlen > len) break;
 
-            while (listenThreadIsRunning) {
-                FD_ZERO(&fdrecv);
-                FD_SET(clientSocket, &fdrecv);
-                numReady = select(0, &fdrecv, nullptr, nullptr, &timeout);
-                if (numReady < 0) {
-                    gui.SetText(IDC_TCP_SERVER_STATUS, L"recv Error!", GUI::wsShow);
-                    break;
-                } else if (numReady > 0 && FD_ISSET(clientSocket, &fdrecv) != 0)  // jest cos do odczytania
-                {
-                    offs = 0;
-                    if (len >= RECV_BUFF_MAX_LEN) len = 0;
-                    recvResult = recv(clientSocket, reinterpret_cast<char *>(buff + len), RECV_BUFF_MAX_LEN - len, 0);
-                    if (recvResult == 0) {  // socket connection has been closed gracefully
-                        gui.SetText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
-                        break;  // Break out of the for loop
-                    } else if (recvResult == SOCKET_ERROR) {
-                        gui.SetText(IDC_TCP_SERVER_STATUS, L"recv Error!", GUI::wsShow);
-                        break;  // Break out of the for loop
-                    } else {
-                        len += recvResult;
-                        // odebrano dane - dzielenie przetwarzanie
-                        while (len >= 4) {
-                            dlen = GetDataLen((msg_type_t)buff[offs]);
-
-                            if (dlen > len) break;
-
-                            gui.ProcRecvData(this, &buff[offs], dlen);
-                            offs += dlen;
-                            len -= dlen;
-                        }
-                        if (len > 0) {
-                            memcpy(&buff[0], &buff[offs], len);
-                        }
+                        gui.procRecvData(this, &buff[offs], dlen);
+                        offs += dlen;
+                        len -= dlen;
                     }
-                } else {
-                    while (!gui.dataToSend.empty()) {
-                        gui.sendLocker.lock();
-                        const auto data = gui.dataToSend.front();
-                        gui.dataToSend.pop_front();
-                        gui.sendLocker.unlock();
-                        send(clientSocket, reinterpret_cast<const char *>(data.data()), data.size(), 0);
+                    if (len > 0) {
+                        memcpy(&buff[0], &buff[offs], len);
                     }
                 }
+            } else {
+                vector<uint8_t> data;
+                while (gui.popDataToSend(data)) {
+                    send(clientSocket, reinterpret_cast<const char *>(data.data()), data.size(), 0);
+                }
             }
-            gui.Disconnected(this);
-            if (INVALID_SOCKET != clientSocket) {
-                closesocket(clientSocket);
-                clientSocket = INVALID_SOCKET;
-            }
+        }
+        gui.disconnected(this);
+        if (INVALID_SOCKET != clientSocket) {
+            closesocket(clientSocket);
+            clientSocket = INVALID_SOCKET;
         }
     }
 
@@ -203,14 +206,15 @@ void TCPServer::ListenThread() {
         closesocket(listenSocket);
         listenSocket = INVALID_SOCKET;
     }
-    listenThreadIsRunning = false;
+    mainLoopIsRunning = false;
 }
 
-void TCPServer::SetServerIPs(uint16_t port) {
-    char ac[80];
+void TCPServer::setServerIPs(uint16_t port) {
+    char ipBuf[INET_ADDRSTRLEN];
     hostent *phe = nullptr;
-    if (gethostname(ac, sizeof(ac)) == SOCKET_ERROR || (phe = gethostbyname(ac)) == nullptr) {
-        gui.SetText(IDC_TCP_SERVER_STATUS, L"gethostname Error!");
+
+    if (gethostname(ipBuf, sizeof(ipBuf)) == SOCKET_ERROR || (phe = gethostbyname(ipBuf)) == nullptr) {
+        gui.setText(IDC_TCP_SERVER_STATUS, L"gethostname Error!");
         closesocket(listenSocket);
         listenSocket = INVALID_SOCKET;
         listenThread.detach();
@@ -222,7 +226,7 @@ void TCPServer::SetServerIPs(uint16_t port) {
     while (phe->h_addr_list[i] != nullptr) {
         memcpy(&server_addr, phe->h_addr_list[i++], sizeof(in_addr));
         if (!server_ip.empty()) server_ip += "\n";
-        server_ip += inet_ntoa(server_addr) + (":" + to_string(port));
+        server_ip += inet_ntop(AF_INET, &server_addr, ipBuf, sizeof(ipBuf)) + (":" + to_string(port));
     }
-    gui.SetText(IDC_TCP_SERVER_IP, wstring(server_ip.begin(), server_ip.end()));
+    gui.setText(IDC_TCP_SERVER_IP, wstring(server_ip.begin(), server_ip.end()));
 }

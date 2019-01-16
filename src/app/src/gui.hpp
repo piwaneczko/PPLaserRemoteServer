@@ -20,6 +20,7 @@
 
 using namespace std;
 
+#define REMOTE_SERVER_TITLE L"PP Remote Server"
 #define REMOTE_SERVER_INSTANCE_STRING L"Remote Server"
 // {f27b335a-e210-4aad-b890-8bc66ff26f2b}
 static const GUID guidServiceClass = {0xf27b335a, 0xe210, 0x4aad, {0xb8, 0x90, 0x8b, 0xc6, 0x6f, 0xf2, 0x6f, 0x2b}};
@@ -42,16 +43,23 @@ enum server_type_en { stUnspecified, stBluetooth, stTCP };
  */
 class Server {
 protected:
+    Gui &gui;
+    thread listenThread;
+    uint32_t listenSocket = INVALID_SOCKET, clientSocket = INVALID_SOCKET;
+    bool mainLoopIsRunning = false;
+    virtual void mainLoop() = 0;
+
     server_type_en serverType = stUnspecified;
-    static uint16_t GetDataLen(msg_type_t type);
+    static uint16_t getDataLen(msg_type_t type);
 
 public:
+    explicit Server(Gui &gui);
     virtual ~Server() = default;
     /**
      * Pobranie pola serverType
      * \return Pole serverType
      */
-    server_type_en GetServerType() const;
+    server_type_en getServerType() const;
 };
 
 /* Struktura prostok¹tu monitora */
@@ -59,15 +67,17 @@ struct ScrrenRect {
     int left, top, width, height;
 };
 
+wstring s2ws(const string &s);
+
 /**
  * Klasa interfejsu graficznego. Klasa tworzy okno dialogowe oraz ikonê systemow¹
  */
-class GUI {
+class Gui {
 private:
     // Update
     UpdateDownloader downloader;
     thread downloadThread;
-    void DownloadThread();
+    void downloadLoop();
     // Server Events
     clock_t lastEventReceived;
     int zoomCount;
@@ -81,17 +91,15 @@ private:
     NOTIFYICONDATA niData;
     friend LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     friend BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
-    static void ShowContextMenu(HWND hWnd);
+    static void showContextMenu(HWND hWnd);
     // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
-    GUI();
+    Gui();
     // Destruktor - usuwa ikonê systemow¹
-    ~GUI();
+    ~Gui();
 
     // Volume control
     AudioVolume audioVolume;
     float volume_;
-    friend class BluetoothServer;
-    friend class TCPServer;
     deque<vector<uint8_t>> dataToSend;
     mutex sendLocker;
     void sendCurrentVolume();
@@ -108,11 +116,11 @@ public:
      * Pobieranie instancji klasy interfejsu graficznego aplikacji
      * \return Referencja na statyczny obiekt typu GUI
      */
-    static GUI &GetInstance();
+    static Gui &getInstance();
     /**
      * Pêtla g³ówna przetwarzaj¹ca komunikaty systemowe. Koñczy siê po zamkniêciu aplikacji
      */
-    static void MainLoop();
+    static void mainLoop();
     /**
      * Modyfikacja obrazu oraz tekstu informacyjnego ikony w pasku systemowym
      * \param[in] iconId     Identyfikator ikony. Wartoœci od 101 do 105
@@ -120,41 +128,46 @@ public:
      *                       Aby nie wyœwietlaæ nale¿y ustawiæ ""
      * \param[in] iconFlag   Flaga ikony w powiadomieniu
      */
-    bool SetTrayIcon(int iconId, const wstring &info = L"", int iconFlag = NIIF_NONE);
+    bool setTrayIcon(int iconId, const wstring &info = L"", int iconFlag = NIIF_NONE);
     /**
      * Ukrycie powiadomienia
      */
-    bool HideTrayIcon();
+    bool hideTrayIcon();
     /**
      * Ustawienie textu pola tekstowego
      * \param[in] textBoxId Identyfikator pola tekstowego. Wartoœci od 1001 do 1006
      * \param[in] text Text pola tekstowego
      * \param[in] windowState Stan okna
      */
-    bool SetText(int textBoxId, const wstring &text, window_state windowState = wsDefault) const;
+    bool setText(int textBoxId, const wstring &text, window_state windowState = wsDefault) const;
     /**
      * Przetworzenie danych od zdalnego klienta
      * \param[in] server WskaŸnik na serwer, który chce przetworzyæ dane (Mo¿e to zrobiæ tylko jeden z dwóch)
      * \param[in] data WskaŸnik na bufor odebranych danych
      * \param[in] dataLen D³ugoœæ danych
      */
-    void ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen);
+    void procRecvData(const Server *server, uint8_t *data, uint16_t dataLen);
     /**
      * Po³¹czenie klienta do serwera
      * \param[in] server WskaŸnik na serwer, do którego po³¹czy³ siê klient
      */
-    void Connected(const Server *server);
+    void connected(const Server *server);
     /**
      * Roz³¹czenie klienta z serwera
      * \param[in] server WskaŸnik na serwer, z którego ro³¹czy³ siê klient
      */
-    void Disconnected(const Server *server);
-
+    void disconnected(const Server *server);
     /**
      * \brief Volume changed event occured
      * \param volume Audio Volume 0-100
      */
-    void VolumeChanged(float volume);
+    void volumeChanged(float volume);
+    /**
+     * \brief Get and pop data to send from waiting deque
+     * \param data Reference to data to send
+     * \return Is something to send
+     */
+    bool popDataToSend(vector<uint8_t> &data);
 };
 
 #endif /* IG_GUI_H */

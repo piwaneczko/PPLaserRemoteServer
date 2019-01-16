@@ -15,19 +15,14 @@
  * Klasa serwera Bluetooth
  */
 class BluetoothServer : public Server {
-private:
-    GUI &gui;
-    thread listenThread;
-    uint32_t listenSocket, clientSocket;
-    bool listenThreadIsRunning;
-    void ListenThread();
+    void mainLoop() override;
 
 public:
     /**
      * Konstruktor klasy serwera Bluetooth
      * \param[in] gui Referencja na intefrejs graficzny
      */
-    BluetoothServer(GUI &gui);
+    explicit BluetoothServer(Gui &gui);
     /* Destruktor klasy */
     ~BluetoothServer();
 };

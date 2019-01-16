@@ -7,10 +7,7 @@
 #include "GUI.hpp"
 #include <ShObjIdl.h>
 #include <assert.h>
-#include <audiopolicy.h>
-#include <endpointvolume.h>
 #include <math.h>
-#include <mmdeviceapi.h>
 #include "XmlConfig.hpp"
 #include "resource.h"
 
@@ -19,7 +16,8 @@ using namespace std;
 #define SWM_TRAYMSG WM_APP  /**< The message ID sent to our window */
 #define SWM_SHOW WM_APP + 1 /**< Show the window                   */
 #define SWM_HIDE WM_APP + 2 /**< Hide the window                   */
-#define SWM_EXIT WM_APP + 3 /**< Close the window                  */
+#define SWM_SETT WM_APP + 3 /**< Show settings                     */
+#define SWM_EXIT WM_APP + 4 /**< Close the window                  */
 #define ID_TIMER 1
 
 enum msg_key_type_t {
@@ -65,7 +63,7 @@ static uint16_t CrcUpdate(uint16_t crc, uint8_t byte) {
 
 LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
-        auto &gui = *reinterpret_cast<GUI *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+        auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
         switch (msg) {
             case SWM_TRAYMSG:
                 switch (lParam) {
@@ -79,7 +77,7 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         return 1;
                     case WM_RBUTTONDOWN:
                     case WM_CONTEXTMENU:
-                        gui.ShowContextMenu(hWnd);
+                        gui.showContextMenu(hWnd);
                     default:
                         break;
                 }
@@ -102,6 +100,12 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     case IDOK:
                         ShowWindow(hWnd, SW_HIDE);
                         break;
+                    case SWM_SETT: {
+                        wchar_t appFileName[MAX_PATH];
+                        GetModuleFileName(nullptr, appFileName, MAX_PATH);
+                        const auto xmlFilePath = wstring(appFileName) + L".xml";
+                        ShellExecute(nullptr, L"open", xmlFilePath.c_str(), nullptr, nullptr, SW_SHOW);
+                    } break;
                     case SWM_EXIT:
                         DestroyWindow(hWnd);
                         break;
@@ -137,7 +141,7 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
     // uzyskanie wskaŸnika na glemm
-    auto gui = reinterpret_cast<GUI *>(dwData);
+    auto gui = reinterpret_cast<Gui *>(dwData);
 
     if (gui != nullptr) {
         const ScrrenRect rect = {lprcMonitor->left, lprcMonitor->top, lprcMonitor->right - lprcMonitor->left, lprcMonitor->bottom - lprcMonitor->top};
@@ -147,9 +151,9 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMoni
     return TRUE;
 }
 
-GUI::GUI()
-    : downloader(L"https://docs.google.com/uc?authuser=0&id=0B-WV4mqjX8JgSUJkN0ptWWxSMmc&export=download",
-                 L"https://docs.google.com/uc?id=0B-WV4mqjX8JgQTVTcXNmWXRkaEE&export=download"),
+Gui::Gui()
+    : downloader(L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.info",
+                 L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.exe"),
       zoomCount(1),
       hidden(),
       audioVolume(this),
@@ -177,7 +181,7 @@ GUI::GUI()
     niData.uCallbackMessage = SWM_TRAYMSG;
 
     // This text will be shown as the icon's tip.
-    wsprintf(niData.szTip, L"PP Remote Server");
+    wsprintf(niData.szTip, REMOTE_SERVER_TITLE);
 
     // Show the notification.
     Shell_NotifyIcon(NIM_ADD, &niData);
@@ -191,11 +195,11 @@ GUI::GUI()
     EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, LPARAM(this));
     assert(screens.size() > 0);
     lastEventReceived = 0;
-    downloadThread = thread(&GUI::DownloadThread, this);
+    downloadThread = thread(&Gui::downloadLoop, this);
 
     SetThreadExecutionState(ES_SYSTEM_REQUIRED);
 }
-GUI::~GUI() {
+Gui::~Gui() {
     Shell_NotifyIcon(NIM_DELETE, &niData);
     downloader.AbortDownload();
     if (downloadThread.joinable()) downloadThread.join();
@@ -227,12 +231,12 @@ void OnUpdateProgress(float value, void *user) {
     const auto text = GetDlgItem(hWnd, IDC_DOWNLOAD_TEXT);
     const auto bar = GetDlgItem(hWnd, IDC_DOWNLOAD_BAR);
     if (text != nullptr && bar != nullptr) {
-        const int intValue = value * 100;
+        const auto intValue = int(value * 100);
         SendMessage(text, WM_SETTEXT, 0, LPARAM((L"Downloading: " + to_wstring(intValue) + L"%").c_str()));
         SendMessage(bar, PBM_SETPOS, WPARAM(intValue), 0);
     }
 }
-void GUI::DownloadThread() {
+void Gui::downloadLoop() {
     auto version = downloader.CheckVersion(UD_CHECK_BASE);
     if (!version.empty()) {
         KillTimer(hWnd, ID_TIMER);
@@ -244,20 +248,20 @@ void GUI::DownloadThread() {
             ChangeUpdateGroupVisibility(hWnd, true);
             ShowWindow(hWnd, SW_SHOWDEFAULT);
             UpdateWindow(hWnd);
-            SetTrayIcon(IDI_UPDATE, L"Downloading started!", NIIF_INFO);
+            setTrayIcon(IDI_UPDATE, L"Downloading started!", NIIF_INFO);
             const auto result = downloader.DownloadAndUpdate(&OnUpdateProgress, static_cast<void *>(&hWnd), TempDirectory);
             switch (result) {
                 case S_OK:
-                    SetTrayIcon(IDI_UPDATE, L"Downloading ended!", NIIF_INFO);
+                    setTrayIcon(IDI_UPDATE, L"Downloading ended!", NIIF_INFO);
                     PostMessage(hWnd, WM_CLOSE, 0, 0);
                     break;
                 case E_ABORT:
-                    SetTrayIcon(IDI_UPDATE, L"Downloading aborted!", NIIF_INFO);
+                    setTrayIcon(IDI_UPDATE, L"Downloading aborted!", NIIF_INFO);
                     ChangeUpdateGroupVisibility(hWnd, false);
                     UpdateWindow(hWnd);
                     break;
                 default:
-                    SetTrayIcon(IDI_UPDATE, L"Downloading error!", NIIF_ERROR);
+                    setTrayIcon(IDI_UPDATE, L"Downloading error!", NIIF_ERROR);
                     ChangeUpdateGroupVisibility(hWnd, false);
                     UpdateWindow(hWnd);
                     break;
@@ -266,7 +270,7 @@ void GUI::DownloadThread() {
     }
 }
 
-void GUI::ShowContextMenu(const HWND hWnd) {
+void Gui::showContextMenu(const HWND hWnd) {
     POINT pt;
     GetCursorPos(&pt);
     const auto hMenu = CreatePopupMenu();
@@ -275,6 +279,7 @@ void GUI::ShowContextMenu(const HWND hWnd) {
             InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_HIDE, L"Hide");
         else
             InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SHOW, L"Show");
+        InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SETT, L"Settings");
         InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_EXIT, L"Exit");
 
         // note:	must set window to the foreground or the
@@ -286,11 +291,11 @@ void GUI::ShowContextMenu(const HWND hWnd) {
     }
 }
 
-GUI &GUI::GetInstance() {
-    static GUI gui;
+Gui &Gui::getInstance() {
+    static Gui gui;
     return gui;
 }
-void GUI::MainLoop() {
+void Gui::mainLoop() {
     // Pêtla komunikatów
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
@@ -298,7 +303,7 @@ void GUI::MainLoop() {
         DispatchMessage(&msg);
     }
 }
-bool GUI::SetTrayIcon(int iconId, const wstring &info, int nifIconFlag) {
+bool Gui::setTrayIcon(int iconId, const wstring &info, int nifIconFlag) {
     // This text will be shown as the icon's info.
     wsprintf(niData.szInfo, info.c_str());
     if (IDI_LASER_ICON <= iconId && iconId <= IDI_UPDATE) {
@@ -317,21 +322,21 @@ bool GUI::SetTrayIcon(int iconId, const wstring &info, int nifIconFlag) {
 
     return result;
 }
-bool GUI::HideTrayIcon() {
+bool Gui::hideTrayIcon() {
     hidden = (Shell_NotifyIcon(NIM_DELETE, &niData) == TRUE);
     return hidden;
 }
-bool GUI::SetText(int textBoxId, const wstring &text, window_state windowState) const {
+bool Gui::setText(int textBoxId, const wstring &text, window_state windowState) const {
     const auto textBox = GetDlgItem(hWnd, textBoxId);
     auto result = TRUE;
     switch (windowState) {
-        case GUI::wsShow:
+        case Gui::wsShow:
             ShowWindow(hWnd, SW_SHOWDEFAULT);
             break;
-        case GUI::wsHide:
+        case Gui::wsHide:
             ShowWindow(hWnd, SW_HIDE);
             break;
-        case GUI::wsTimedHide:
+        case Gui::wsTimedHide:
             if (AutoHide > 0u) result &= SetTimer(hWnd, ID_TIMER, AutoHide, nullptr);
             break;
         default:
@@ -400,17 +405,26 @@ void mouse_event(uint16_t flag, int32_t dx = 0, int32_t dy = 0) {
         ip.mi.mouseData = 0;
     }
     ip.mi.time = 0;
-    ip.mi.dwFlags = flag | ((flag & MOUSEEVENTF_ABSOLUTE == 0) ? MOUSEEVENTF_VIRTUALDESK : 0);
+    ip.mi.dwFlags = flag | (((flag & MOUSEEVENTF_ABSOLUTE) == 0) ? MOUSEEVENTF_VIRTUALDESK : 0);
     SendInput(1, &ip, sizeof(INPUT));
     KillScreenSaver();
 }
 
-void GUI::VolumeChanged(float volume) {
+void Gui::volumeChanged(float volume) {
     volume_ = volume;
     sendCurrentVolume();
 }
 
-void GUI::sendCurrentVolume() {
+bool Gui::popDataToSend(vector<uint8_t> &data) {
+    lock_guard<mutex> lock(sendLocker);
+    if (dataToSend.empty()) return false;
+
+    data = dataToSend.front();
+    dataToSend.pop_front();
+    return true;
+}
+
+void Gui::sendCurrentVolume() {
     lock_guard<mutex> lock(sendLocker);
     dataToSend.emplace_back(vector<uint8_t>(2));
     auto &dataVec = dataToSend.back();
@@ -418,7 +432,7 @@ void GUI::sendCurrentVolume() {
     dataVec[1] = uint8_t(volume_);
 }
 
-void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
+void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
     // serverMutex.lock();
     if (connectedServers.size() > 0 && connectedServers.front() == server && dataLen >= 2) {
         uint16_t crc = CRC_INIT;
@@ -428,7 +442,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
             debugGoodCount++;
         else
             debugBadCount++;
-        SetText(server->GetServerType() == stTCP ? IDC_TCP_SERVER_STATUS : IDC_BTH_SERVER_STATUS,
+        setText(server->getServerType() == stTCP ? IDC_TCP_SERVER_STATUS : IDC_BTH_SERVER_STATUS,
                 L"Connected " + to_wstring(debugGoodCount) + L"/" + to_wstring(debugGoodCount + debugBadCount));
 #endif
         if (crc == CRC_VALID) {
@@ -511,7 +525,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                             }
                             break;
                         case msg_key_type_pause:
-                            keybd_event(VkKeyScan('B'), 0xB0, 0, 0);
+                            keybd_event(BYTE(VkKeyScan('B')), 0xB0, 0, 0);
                             break;
                         default:
                             break;
@@ -519,7 +533,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                     break;
                 case msg_type_laser:
                     if (data[1]) {
-                        SetTrayIcon(IDI_LASER_ICON_ON, L"");
+                        setTrayIcon(IDI_LASER_ICON_ON, L"");
                         keybd_event(VK_LCONTROL, key_down);
                         if ((eventReceived - lastEventReceived) < 5000) {
                             // bez zmiany pozycji
@@ -529,7 +543,7 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                             mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, 0x8000, 0x8000);
                         }
                     } else {
-                        SetTrayIcon(IDI_LASER_ICON_OFF, L"");
+                        setTrayIcon(IDI_LASER_ICON_OFF, L"");
                         keybd_event(VK_LCONTROL, key_up);
                         mouse_event(MOUSEEVENTF_LEFTUP);
                     }
@@ -638,29 +652,29 @@ void GUI::ProcRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
     }
     // serverMutex.unlock();
 }
-void GUI::Connected(const Server *server) {
-    serverMutex.lock();
+void Gui::connected(const Server *server) {
+    lock_guard<mutex> lock(serverMutex);
     if (connectedServers.size() == 0) {
-        SetTrayIcon(IDI_LASER_ICON_OFF, L"Remote client connected!");
+        setTrayIcon(IDI_LASER_ICON_OFF, L"Remote client connected!");
     }
     if (find(connectedServers.begin(), connectedServers.end(), server) == connectedServers.end()) {
         connectedServers.push_back(server);
     }
-    serverMutex.unlock();
 }
-void GUI::Disconnected(const Server *server) {
-    serverMutex.lock();
+void Gui::disconnected(const Server *server) {
+    lock_guard<mutex> lock(serverMutex);
     const auto server_it = find(connectedServers.begin(), connectedServers.end(), server);
     if (server_it != connectedServers.end()) {
         connectedServers.erase(server_it);
     }
     if (connectedServers.size() == 0) {
-        SetTrayIcon(IDI_LASER_ICON, L"Remote client disconnected!");
+        setTrayIcon(IDI_LASER_ICON, L"Remote client disconnected!");
     }
-    serverMutex.unlock();
 }
 
-uint16_t Server::GetDataLen(msg_type_t type) {
+Server::Server(Gui &gui) : gui(gui) {}
+
+uint16_t Server::getDataLen(msg_type_t type) {
     uint16_t dlen;
     switch (type) {
         case msg_type_gesture:
@@ -680,6 +694,13 @@ uint16_t Server::GetDataLen(msg_type_t type) {
     return dlen;
 }
 
-server_type_en Server::GetServerType() const {
+server_type_en Server::getServerType() const {
     return this->serverType;
+}
+
+wstring s2ws(const string &s) {
+    const auto sizeNeeded = MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, nullptr, 0);
+    std::wstring strTo(sizeNeeded, 0);
+    MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, &strTo[0], sizeNeeded);
+    return strTo;
 }

@@ -10,7 +10,7 @@
 // Maximum volume level on trackbar
 #define MAX_VOL 100
 
-AudioVolumeCallback::AudioVolumeCallback(GUI &gui) : cRef_(1), gui_(gui), guid() {}
+AudioVolumeCallback::AudioVolumeCallback(Gui &gui) : cRef_(1), gui_(gui), guid() {}
 
 AudioVolumeCallback::~AudioVolumeCallback() {}
 
@@ -49,18 +49,12 @@ HRESULT STDMETHODCALLTYPE AudioVolumeCallback::OnNotify(PAUDIO_VOLUME_NOTIFICATI
         return E_INVALIDARG;
     }
     if (pNotify->guidEventContext != guid) {
-        gui_.VolumeChanged(pNotify->bMuted ? 0.0f : MAX_VOL * pNotify->fMasterVolume);
+        gui_.volumeChanged(pNotify->bMuted ? 0.0f : MAX_VOL * pNotify->fMasterVolume);
     }
     return S_OK;
 }
 
-wstring s2ws(const string &s) {
-    const auto sizeNeeded = MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, nullptr, 0);
-    std::wstring strTo(sizeNeeded, 0);
-    MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, &strTo[0], sizeNeeded);
-    return strTo;
-}
-AudioVolume::AudioVolume(GUI *gui) : gui_(gui), callback_(*gui) {
+AudioVolume::AudioVolume(Gui *gui) : gui_(gui), callback_(*gui) {
     CoInitialize(nullptr);
     try {
         auto hr = CoCreateGuid(&callback_.guid);

@@ -24,7 +24,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={pf}\{#MyAppPublisher}\{#MyAppName}
 DefaultGroupName={#MyAppPublisher}\{#MyAppName}
-OutputBaseFilename=Laser Remote Server Setup
+OutputBaseFilename=ppremotesetup
 OutputDir=install\bin
 WizardImageFile=src\app\resources\silsense.bmp
 WizardSmallImageFile=src\app\resources\silsensesmall.bmp
@@ -36,7 +36,8 @@ DisableProgramGroupPage=auto
 DisableReadyPage=true                 
 ;Registry key add PrivilegesRequired
 PrivilegesRequired=poweruser
-UninstallDisplayIcon=PPLaserRemoteServer\laser_icon.ico
+UninstallDisplayIcon=src\app\resources\laser_icon.ico
+UninstallIconFile=src\app\resources\laser_icon.ico
 
 [Languages]
 Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
@@ -48,21 +49,27 @@ Name: Autostart; Description: "Run application at Windows Startup"; GroupDescrip
 
 [Dirs]
 Name: {app}; Permissions: users-full
+         
+#include <idp.iss>
 
 [Files]           
 Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"    
-Source: "install\bin\{#MyAppExeName}.xml"; DestDir: "{app}" 
-Source: "install\deps\vc_redist.x86.exe"; DestDir: {tmp}; Flags: deleteafterinstall   
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
-
+         
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}" 
-Name: "{group}\{#MyAppName}.xml"; Filename: "{app}\{#MyAppExeName}.xml";
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 
 [Registry]
 Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: Autostart;
+    
+[Code]
+procedure InitializeWizard();
+begin                                                                                          
+    idpAddFileSize('https://aka.ms/vs/15/release/VC_redist.x86.exe', ExpandConstant('{tmp}\vc_redist.x86.exe'), 14426128);
+    idpDownloadAfter(wpReady);
+end;
 
 [Run]                                                                           
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Laser Remote Server"" dir=in action=allow program=""{app}\{#MyAppExeName}"" protocol=TCP enable=yes"; StatusMsg: "Adding exception to firewall for pragram: Laser Remote Server.exe..."; Flags: runhidden; Tasks: Firewall;

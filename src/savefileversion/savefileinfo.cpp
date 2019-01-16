@@ -11,7 +11,7 @@ namespace fs = std::experimental::filesystem;
 int main(const int argc, char *argv[]) {
     OPENFILENAME ofn;
     char fNames[MAX_PATH] = {0};  // buffer for file name
-    const auto pathIsGiven = argc == 2 && fs::exists(argv[1]);
+    const auto givenPath = string(argc == 2 && fs::exists(argv[1]) ? argv[1] : "");
     ZeroMemory(&ofn, sizeof(OPENFILENAME));
     ofn.lStructSize = sizeof(OPENFILENAME);
     ofn.lpstrFilter = "Execute Files (*.exe)\0*.exe\0";
@@ -21,9 +21,9 @@ int main(const int argc, char *argv[]) {
     ofn.nMaxFileTitle = MAX_PATH;
     ofn.lpstrInitialDir = "";
     ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
-    if (pathIsGiven || GetOpenFileName(&ofn)) {
-        if (pathIsGiven) {
-            strcpy_s(ofn.lpstrFile, MAX_PATH, argv[1]);
+    if (!givenPath.empty() || GetOpenFileName(&ofn)) {
+        if (!givenPath.empty()) {
+            strcpy_s(ofn.lpstrFile, MAX_PATH, givenPath.c_str());
         }
         const auto size = GetFileVersionInfoSize(ofn.lpstrFile, nullptr);
         if (size > 0) {
@@ -55,13 +55,15 @@ int main(const int argc, char *argv[]) {
                     ofn.lpstrTitle = "Select version file";
                     ofn.lpstrFilter = "Version Files (*.ver)\0*.ver\0";
 #endif
-                    if (pathIsGiven || GetSaveFileName(&ofn)) {
+                    if (!givenPath.empty() || GetSaveFileName(&ofn)) {
+                        auto filename = string(ofn.lpstrFile);
+                        filename = filename.substr(0, filename.find(".exe"));
 #if SAVE_INFO
-                        strcpy_s(ofn.lpstrFile, MAX_PATH, (string(ofn.lpstrFile) + ".info").c_str());
+                        filename += ".info";
 #else
-                        strcpy_s(ofn.lpstrFile, MAX_PATH, (string(ofn.lpstrFile) + ".ver").c_str());
+                        filename += ".ver";
 #endif
-                        ofstream file(ofn.lpstrFile, ios::out | ios::binary | ios::trunc);
+                        ofstream file(filename, ios::out | ios::binary | ios::trunc);
 #if SAVE_INFO
                         const file_info_t info = {ver, exeFileSize};
                         file.write(reinterpret_cast<const char *>(&info), sizeof(file_info_t));
