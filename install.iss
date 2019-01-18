@@ -2,8 +2,8 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Laser Remote Server"        
-#define MyAppPublisher "SilSense Technologies"
-#define MyAppURL "http://www.SilSense.pl/" 
+#define MyAppPublisher "Aircom AI"
+#define MyAppURL "http://www.aircom.ag/" 
 #define MyAppExeName "PPLaserRemoteServer.exe"    
 #define MyAppVersion GetFileVersion('install\bin\PPLaserRemoteServer.exe')    
 
@@ -26,18 +26,20 @@ DefaultDirName={pf}\{#MyAppPublisher}\{#MyAppName}
 DefaultGroupName={#MyAppPublisher}\{#MyAppName}
 OutputBaseFilename=ppremotesetup
 OutputDir=install\bin
-WizardImageFile=src\app\resources\silsense.bmp
-WizardSmallImageFile=src\app\resources\silsensesmall.bmp
+WizardImageFile=src\app\resources\image.bmp
+WizardSmallImageFile=src\app\resources\imagesmall.bmp
 WizardImageStretch=False
 Compression=lzma
 SolidCompression=yes
 DisableDirPage=auto      
 DisableProgramGroupPage=auto
-DisableReadyPage=true                 
+DisableReadyPage=true         
+DisableWelcomePage=no        
 ;Registry key add PrivilegesRequired
 PrivilegesRequired=poweruser
-UninstallDisplayIcon=src\app\resources\laser_icon.ico
-UninstallIconFile=src\app\resources\laser_icon.ico
+SetupIconFile=src\app\resources\laser_icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+LicenseFile=license.txt
 
 [Languages]
 Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
@@ -53,7 +55,7 @@ Name: {app}; Permissions: users-full
 #include <idp.iss>
 
 [Files]           
-Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"    
+Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"   
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
          
 [Icons]
