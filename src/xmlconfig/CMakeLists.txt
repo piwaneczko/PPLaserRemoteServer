@@ -35,7 +35,7 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE src
 )
 
-install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}_config
+install(TARGETS ${PROJECT_NAME}
         ARCHIVE DESTINATION lib COMPONENT lib
         LIBRARY DESTINATION lib COMPONENT lib
         RUNTIME DESTINATION bin COMPONENT bin

@@ -8,6 +8,9 @@
 #include <ShObjIdl.h>
 #include <assert.h>
 #include <math.h>
+#include <future>
+#include "BluetoothServer.hpp"
+#include "TCPServer.hpp"
 #include "XmlConfig.hpp"
 #include "resource.h"
 
@@ -91,6 +94,9 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     return 1;
                 }
                 break;
+            case WM_POWERBROADCAST:
+                if (gui.connectedServer) gui.connectedServer->reset();
+                return 1;
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
                     case SWM_SHOW:
@@ -179,6 +185,8 @@ Gui::Gui()
     niData.hIcon = HICON(LoadImage(
         hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
     niData.uCallbackMessage = SWM_TRAYMSG;
+    niData.szInfoTitle[0] = L'\0';
+    niData.szInfo[0] = L'\0';
 
     // This text will be shown as the icon's tip.
     wsprintf(niData.szTip, REMOTE_SERVER_TITLE);
@@ -198,13 +206,19 @@ Gui::Gui()
     downloadThread = thread(&Gui::downloadLoop, this);
 
     SetThreadExecutionState(ES_SYSTEM_REQUIRED);
+
+    bluetoothServer = make_unique<BluetoothServer>(*this);
+    tcpServer = make_unique<TCPServer>(*this);
+    moveThread = thread(&Gui::moveLoop, this);
 }
 Gui::~Gui() {
     Shell_NotifyIcon(NIM_DELETE, &niData);
     downloader.AbortDownload();
     if (downloadThread.joinable()) downloadThread.join();
+    moveLoopIsRunning = false;
+    if (moveThread.joinable()) moveThread.join();
 }
-void ChangeUpdateGroupVisibility(HWND hWnd, bool visible) {
+void changeUpdateGroupVisibility(HWND hWnd, bool visible) {
     // pokazanie kontrolek aktualizacji
     ShowWindow(GetDlgItem(hWnd, IDC_DOWNLOAD_TEXT), visible ? SW_SHOW : SW_HIDE);
     ShowWindow(GetDlgItem(hWnd, IDC_DOWNLOAD_BAR), visible ? SW_SHOW : SW_HIDE);
@@ -226,7 +240,7 @@ void ChangeUpdateGroupVisibility(HWND hWnd, bool visible) {
     ShowWindow(GetDlgItem(hWnd, IDC_TCP_CIP_LABEL), visible ? SW_HIDE : SW_SHOW);
     ShowWindow(GetDlgItem(hWnd, IDC_TCP_CLIENT_IP), visible ? SW_HIDE : SW_SHOW);
 }
-void OnUpdateProgress(float value, void *user) {
+void onUpdateProgress(float value, void *user) {
     auto &hWnd = *static_cast<HWND *>(user);
     const auto text = GetDlgItem(hWnd, IDC_DOWNLOAD_TEXT);
     const auto bar = GetDlgItem(hWnd, IDC_DOWNLOAD_BAR);
@@ -245,11 +259,11 @@ void Gui::downloadLoop() {
                        (L"New version (" + version + L") available!").c_str(),
                        MB_YESNO | MB_ICONQUESTION)
             == IDYES) {
-            ChangeUpdateGroupVisibility(hWnd, true);
+            changeUpdateGroupVisibility(hWnd, true);
             ShowWindow(hWnd, SW_SHOWDEFAULT);
             UpdateWindow(hWnd);
             setTrayIcon(IDI_UPDATE, L"Downloading started!", NIIF_INFO);
-            const auto result = downloader.DownloadAndUpdate(&OnUpdateProgress, static_cast<void *>(&hWnd), TempDirectory);
+            const auto result = downloader.DownloadAndUpdate(&onUpdateProgress, static_cast<void *>(&hWnd), TempDirectory);
             switch (result) {
                 case S_OK:
                     setTrayIcon(IDI_UPDATE, L"Downloading ended!", NIIF_INFO);
@@ -257,12 +271,12 @@ void Gui::downloadLoop() {
                     break;
                 case E_ABORT:
                     setTrayIcon(IDI_UPDATE, L"Downloading aborted!", NIIF_INFO);
-                    ChangeUpdateGroupVisibility(hWnd, false);
+                    changeUpdateGroupVisibility(hWnd, false);
                     UpdateWindow(hWnd);
                     break;
                 default:
                     setTrayIcon(IDI_UPDATE, L"Downloading error!", NIIF_ERROR);
-                    ChangeUpdateGroupVisibility(hWnd, false);
+                    changeUpdateGroupVisibility(hWnd, false);
                     UpdateWindow(hWnd);
                     break;
             }
@@ -291,10 +305,38 @@ void Gui::showContextMenu(const HWND hWnd) {
     }
 }
 
-Gui &Gui::getInstance() {
-    static Gui gui;
-    return gui;
+void Gui::moveLoop() {
+    auto moveEnded = true;
+    moveLoopIsRunning = true;
+    POINT pv = {0, 0}, sp = {0, 0};
+    while (moveLoopIsRunning) {
+        if (!moveDeque.empty()) {
+            if (moveEnded) {
+                GetCursorPos(&pv);
+                sp = pv;
+            }
+            lock_guard<mutex> lock(moveLocker);
+            while (!moveDeque.empty()) {
+                const auto mp = moveDeque.front();
+                sp.x += mp.x;
+                sp.y += mp.y;
+                moveDeque.pop_front();
+            }
+        }
+#define EP 0.5
+        if (sp.x != pv.x || sp.y != pv.y) {
+            const auto ppv = pv;
+            pv.x = long(pv.x * (1.0 - EP) + sp.x * EP);
+            pv.y = long(pv.y * (1.0 - EP) + sp.y * EP);
+            mouseEvent(MOUSEEVENTF_MOVE, int(pv.x - ppv.x), int(pv.y - ppv.y));
+            this_thread::sleep_for(5ms);
+        } else if (moveDeque.empty()) {
+            moveEnded = true;
+            this_thread::sleep_for(100ms);
+        }
+    }
 }
+
 void Gui::mainLoop() {
     // Pêtla komunikatów
     MSG msg;
@@ -388,7 +430,7 @@ void keybd_event(uint16_t keyCode, KeyClickFlag flag = key_both, uint8_t scancod
     }
 }
 
-void mouse_event(uint16_t flag, int32_t dx = 0, int32_t dy = 0) {
+void Gui::mouseEvent(uint16_t flag, int dx, int dy) {
     INPUT ip;
     ip.type = INPUT_MOUSE;
     ip.mi.dwExtraInfo = 0;
@@ -433,8 +475,9 @@ void Gui::sendCurrentVolume() {
 }
 
 void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
+    int ints[2], dx, dy;
     // serverMutex.lock();
-    if (connectedServers.size() > 0 && connectedServers.front() == server && dataLen >= 2) {
+    if (connectedServer == server && dataLen >= 2) {
         uint16_t crc = CRC_INIT;
         for (uint16_t i = 0; i < dataLen; i++) crc = CrcUpdate(crc, data[i]);
 #if _DEBUG
@@ -469,16 +512,16 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                             keybd_event(VK_RIGHT);
                             break;
                         case msg_key_type_left_down:
-                            mouse_event(MOUSEEVENTF_LEFTDOWN);
+                            mouseEvent(MOUSEEVENTF_LEFTDOWN);
                             break;
                         case msg_key_type_left_up:
-                            mouse_event(MOUSEEVENTF_LEFTUP);
+                            mouseEvent(MOUSEEVENTF_LEFTUP);
                             break;
                         case msg_key_type_right_down:
-                            mouse_event(MOUSEEVENTF_RIGHTDOWN);
+                            mouseEvent(MOUSEEVENTF_RIGHTDOWN);
                             break;
                         case msg_key_type_right_up:
-                            mouse_event(MOUSEEVENTF_RIGHTUP);
+                            mouseEvent(MOUSEEVENTF_RIGHTUP);
                             break;
                         case msg_key_type_volume_down: {
                             keybd_event(VK_VOLUME_DOWN);
@@ -537,15 +580,15 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         keybd_event(VK_LCONTROL, key_down);
                         if ((eventReceived - lastEventReceived) < 5000) {
                             // bez zmiany pozycji
-                            mouse_event(MOUSEEVENTF_LEFTDOWN);
+                            mouseEvent(MOUSEEVENTF_LEFTDOWN);
                         } else {
                             // wyœrodkowanie
-                            mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, 0x8000, 0x8000);
+                            mouseEvent(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, 0x8000, 0x8000);
                         }
                     } else {
                         setTrayIcon(IDI_LASER_ICON_OFF, L"");
                         keybd_event(VK_LCONTROL, key_up);
-                        mouse_event(MOUSEEVENTF_LEFTUP);
+                        mouseEvent(MOUSEEVENTF_LEFTUP);
                     }
                     break;
                 case msg_type_gesture:
@@ -553,7 +596,9 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         memcpy(&ints[0], &data[1], 8);
                         dx = int(float(ints[0]) * screens[0].width / (zoomCount * 1000000.0f));
                         dy = int(float(ints[1]) * screens[0].height / (zoomCount * 1000000.0f));
-                        mouse_event(MOUSEEVENTF_MOVE, dx, dy);
+                        // mouseEvent(MOUSEEVENTF_MOVE, dx, dy);
+                        lock_guard<mutex> lock(moveLocker);
+                        moveDeque.push_back(POINT{dx, dy});
                     }
                     break;
                 case msg_type_wheel:
@@ -561,7 +606,7 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         memcpy(&ints[0], &data[1], 8);
                         dx = ints[0];
                         dy = ints[1];
-                        mouse_event(MOUSEEVENTF_WHEEL, dx, dy);
+                        mouseEvent(MOUSEEVENTF_WHEEL, dx, dy);
                     }
                     break;
                 case msg_type_gyro:
@@ -569,7 +614,9 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         memcpy(&ints, &data[1], 8);
                         dx = int(float(ints[0]) / (zoomCount * 1000000.0f) * screens[0].width / float(M_PI / 3.0));
                         dy = int(float(ints[1]) / (zoomCount * 1000000.0f) * screens[0].width / float(M_PI / 3.0));
-                        mouse_event(MOUSEEVENTF_MOVE, dx, dy);
+                        mouseEvent(MOUSEEVENTF_MOVE, dx, dy);
+                        lock_guard<mutex> lock(moveLocker);
+                        moveDeque.push_back(POINT{dx, dy});
                     }
                     break;
                 case msg_type_keyboard:
@@ -652,22 +699,18 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
     }
     // serverMutex.unlock();
 }
-void Gui::connected(const Server *server) {
+void Gui::connected(Server *server) {
     lock_guard<mutex> lock(serverMutex);
-    if (connectedServers.size() == 0) {
+    if (connectedServer != server) {
+        if (connectedServer != nullptr) connectedServer->disconnect();
         setTrayIcon(IDI_LASER_ICON_OFF, L"Remote client connected!");
-    }
-    if (find(connectedServers.begin(), connectedServers.end(), server) == connectedServers.end()) {
-        connectedServers.push_back(server);
+        connectedServer = server;
     }
 }
-void Gui::disconnected(const Server *server) {
-    lock_guard<mutex> lock(serverMutex);
-    const auto server_it = find(connectedServers.begin(), connectedServers.end(), server);
-    if (server_it != connectedServers.end()) {
-        connectedServers.erase(server_it);
-    }
-    if (connectedServers.size() == 0) {
+void Gui::disconnected(Server *server) {
+    unique_lock<mutex> lock(serverMutex, try_to_lock);
+    if (server == connectedServer) {
+        connectedServer = nullptr;
         setTrayIcon(IDI_LASER_ICON, L"Remote client disconnected!");
     }
 }
@@ -696,6 +739,24 @@ uint16_t Server::getDataLen(msg_type_t type) {
 
 server_type_en Server::getServerType() const {
     return this->serverType;
+}
+
+#define SD_BOTH 0x02
+void Server::disconnect() {
+    if (INVALID_SOCKET != clientSocket) {
+        shutdown(clientSocket, SD_BOTH);
+        clientSocket = INVALID_SOCKET;
+    }
+}
+
+void Server::resetLoop() {
+    destroy();
+    init();
+    resetThread.detach();
+}
+
+void Server::reset() {
+    resetThread = thread(&Server::resetLoop, this);
 }
 
 wstring s2ws(const string &s) {

@@ -8,7 +8,6 @@
 #ifndef IG_BLUETOOTH_SERVER_H
 #define IG_BLUETOOTH_SERVER_H
 
-#include <thread>
 #include "GUI.hpp"
 
 /**
@@ -16,6 +15,8 @@
  */
 class BluetoothServer : public Server {
     void mainLoop() override;
+    void init() override;
+    void destroy() override;
 
 public:
     /**

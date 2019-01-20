@@ -44,10 +44,13 @@ enum server_type_en { stUnspecified, stBluetooth, stTCP };
 class Server {
 protected:
     Gui &gui;
-    thread listenThread;
+    thread listenThread, resetThread;
     uint32_t listenSocket = INVALID_SOCKET, clientSocket = INVALID_SOCKET;
     bool mainLoopIsRunning = false;
     virtual void mainLoop() = 0;
+    virtual void init() = 0;
+    virtual void destroy() = 0;
+    void resetLoop();
 
     server_type_en serverType = stUnspecified;
     static uint16_t getDataLen(msg_type_t type);
@@ -60,6 +63,14 @@ public:
      * \return Pole serverType
      */
     server_type_en getServerType() const;
+    /**
+     * Disconnecting client with shutdown (R&W)
+     */
+    void disconnect();
+    /**
+     * Resets the mainLoop and listenSocket
+     */
+    void reset();
 };
 
 /* Struktura prostok¹tu monitora */
@@ -81,8 +92,9 @@ private:
     // Server Events
     clock_t lastEventReceived;
     int zoomCount;
-    int ints[2], dx, dy;
-    deque<const Server *> connectedServers;
+    Server *connectedServer = nullptr;
+    unique_ptr<Server> bluetoothServer;
+    unique_ptr<Server> tcpServer;
     deque<ScrrenRect> screens;
     mutex serverMutex;
     HWND hWnd;
@@ -92,10 +104,14 @@ private:
     friend LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     friend BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
     static void showContextMenu(HWND hWnd);
-    // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
-    Gui();
-    // Destruktor - usuwa ikonê systemow¹
-    ~Gui();
+
+    // Move inertion
+    bool moveLoopIsRunning;
+    thread moveThread;
+    deque<POINT> moveDeque;
+    mutex moveLocker;
+    void moveLoop();
+    static void mouseEvent(uint16_t flag, int32_t dx = 0, int32_t dy = 0);
 
     // Volume control
     AudioVolume audioVolume;
@@ -112,11 +128,10 @@ public:
         wsHide,     /**< Ukrycie okna          */
         wsTimedHide /**< Ukrycie okna po 2s    */
     };
-    /**
-     * Pobieranie instancji klasy interfejsu graficznego aplikacji
-     * \return Referencja na statyczny obiekt typu GUI
-     */
-    static Gui &getInstance();
+    // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
+    Gui();
+    // Destruktor - usuwa ikonê systemow¹
+    ~Gui();
     /**
      * Pêtla g³ówna przetwarzaj¹ca komunikaty systemowe. Koñczy siê po zamkniêciu aplikacji
      */
@@ -151,12 +166,12 @@ public:
      * Po³¹czenie klienta do serwera
      * \param[in] server WskaŸnik na serwer, do którego po³¹czy³ siê klient
      */
-    void connected(const Server *server);
+    void connected(Server *server);
     /**
      * Roz³¹czenie klienta z serwera
      * \param[in] server WskaŸnik na serwer, z którego ro³¹czy³ siê klient
      */
-    void disconnected(const Server *server);
+    void disconnected(Server *server);
     /**
      * \brief Volume changed event occured
      * \param volume Audio Volume 0-100

@@ -55,7 +55,7 @@ Name: {app}; Permissions: users-full
 #include <idp.iss>
 
 [Files]           
-Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"   
+Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion 
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
          
 [Icons]

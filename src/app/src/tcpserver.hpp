@@ -8,7 +8,6 @@
 #ifndef IG_TCP_SERVER_H
 #define IG_TCP_SERVER_H
 
-#include <thread>
 #include "GUI.hpp"
 
 /**
@@ -17,6 +16,8 @@
 class TCPServer : public Server {
     uint16_t port;
     void mainLoop() override;
+    void init() override;
+    void destroy() override;
     void setServerIPs(uint16_t port);
 
 public:

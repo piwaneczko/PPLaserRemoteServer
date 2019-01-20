@@ -48,16 +48,16 @@ if(WIN32)
 endif()
 target_link_libraries(${PROJECT_NAME} UpdateDownloader XmlConfig)
 add_definitions(-DUNICODE -D_USE_MATH_DEFINES)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E remove "${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:${PROJECT_NAME}>")
 
 #######################################
 
 ############ Installation #############
 
-install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}_config
+install(TARGETS ${PROJECT_NAME}
         ARCHIVE DESTINATION lib COMPONENT lib
         LIBRARY DESTINATION lib COMPONENT lib
         RUNTIME DESTINATION bin COMPONENT bin
 )
-    
     
 #######################################
