@@ -69,8 +69,9 @@ void TCPServer::mainLoop() {
     sockaddr_in clientAddr = {0};
     int clientAddrLen = sizeof(sockaddr_in);
 
-    FD_SET fdrecv;
-    timeval timeout = {0, 1000};  // 1ms
+    FD_SET fdrecv, listenfd;
+    timeval timeout = {0, 1000};          // 1ms
+    timeval listenTimeout = {0, 200000};  // 200Ms
 
     if (DefaultPort() != port) {
         if (MessageBox(nullptr,
@@ -92,73 +93,78 @@ void TCPServer::mainLoop() {
         gui.setText(IDC_TCP_CLIENT_IP, L"None");
         gui.setText(IDC_TCP_SERVER_STATUS, L"Listening...");
 
-        clientAddr = {0};
-        clientAddrLen = sizeof(sockaddr_in);
-        ZeroMemory(&clientAddr, sizeof(clientAddr));
-        clientSocket = accept(listenSocket, reinterpret_cast<sockaddr *>(&clientAddr), &clientAddrLen);
-        if (INVALID_SOCKET == clientSocket) {
-            if (mainLoopIsRunning) {
-                gui.setText(IDC_TCP_SERVER_STATUS, L"accept Error!", Gui::wsShow);
-            } else {
-                gui.setText(IDC_TCP_SERVER_STATUS, L"Ending listening", Gui::wsShow);
-            }
-            break;  // Break out of the for loop
-        }
-
-        gui.setText(IDC_TCP_SERVER_STATUS, L"Connected");
-
-        char ipBuf[INET_ADDRSTRLEN];
-        string clientIP = inet_ntop(AF_INET, &clientAddr.sin_addr, ipBuf, sizeof(ipBuf));
-        gui.setText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
-        gui.connected(this);
-
-        while (mainLoopIsRunning) {
-            FD_ZERO(&fdrecv);
-            FD_SET(clientSocket, &fdrecv);
-            const auto numReady = select(0, &fdrecv, nullptr, nullptr, &timeout);
-            if (!mainLoopIsRunning)
-                break;
-            else if (numReady < 0) {
-                gui.setText(IDC_TCP_SERVER_STATUS, L"recv Error!", Gui::wsShow);
-                break;
-            } else if (numReady > 0 && FD_ISSET(clientSocket, &fdrecv) != 0)  // jest cos do odczytania
-            {
-                offs = 0;
-                if (len >= RECV_BUFF_MAX_LEN) len = 0;
-                recvResult = recv(clientSocket, reinterpret_cast<char *>(buff + len), RECV_BUFF_MAX_LEN - len, 0);
-                if (recvResult == 0) {  // socket connection has been closed gracefully
-                    gui.setText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
-                    break;  // Break out of the for loop
-                } else if (recvResult == SOCKET_ERROR) {
-                    gui.setText(IDC_TCP_SERVER_STATUS, L"recv Error!", Gui::wsShow);
-                    break;  // Break out of the for loop
+        FD_ZERO(&listenfd);
+        FD_SET(listenSocket, &listenfd);
+        auto numReady = select(0, &listenfd, nullptr, nullptr, &listenTimeout);
+        if (FD_ISSET(listenSocket, &listenfd) && numReady) {
+            clientAddr = {0};
+            clientAddrLen = sizeof(sockaddr_in);
+            ZeroMemory(&clientAddr, sizeof(clientAddr));
+            clientSocket = accept(listenSocket, reinterpret_cast<sockaddr *>(&clientAddr), &clientAddrLen);
+            if (INVALID_SOCKET == clientSocket) {
+                if (mainLoopIsRunning) {
+                    gui.setText(IDC_TCP_SERVER_STATUS, L"accept Error!", Gui::wsShow);
                 } else {
-                    len += recvResult;
-                    // odebrano dane - dzielenie przetwarzanie
-                    while (len >= 4) {
-                        dlen = getDataLen((msg_type_t)buff[offs]);
-
-                        if (dlen > len) break;
-
-                        gui.procRecvData(this, &buff[offs], dlen);
-                        offs += dlen;
-                        len -= dlen;
-                    }
-                    if (len > 0) {
-                        memcpy(&buff[0], &buff[offs], len);
-                    }
+                    gui.setText(IDC_TCP_SERVER_STATUS, L"Ending listening", Gui::wsShow);
                 }
-            } else {
-                vector<uint8_t> data;
-                while (gui.popDataToSend(data)) {
-                    send(clientSocket, reinterpret_cast<const char *>(data.data()), data.size(), 0);
+                break;  // Break out of the for loop
+            }
+
+            gui.setText(IDC_TCP_SERVER_STATUS, L"Connected");
+
+            char ipBuf[INET_ADDRSTRLEN];
+            string clientIP = inet_ntop(AF_INET, &clientAddr.sin_addr, ipBuf, sizeof(ipBuf));
+            gui.setText(IDC_TCP_CLIENT_IP, wstring(clientIP.begin(), clientIP.end()));
+            gui.connected(this);
+
+            while (mainLoopIsRunning) {
+                FD_ZERO(&fdrecv);
+                FD_SET(clientSocket, &fdrecv);
+                numReady = select(0, &fdrecv, nullptr, nullptr, &timeout);
+                if (!mainLoopIsRunning)
+                    break;
+                else if (numReady < 0) {
+                    gui.setText(IDC_TCP_SERVER_STATUS, L"recv Error!", Gui::wsShow);
+                    break;
+                } else if (numReady > 0 && FD_ISSET(clientSocket, &fdrecv) != 0)  // jest cos do odczytania
+                {
+                    offs = 0;
+                    if (len >= RECV_BUFF_MAX_LEN) len = 0;
+                    recvResult = recv(clientSocket, reinterpret_cast<char *>(buff + len), RECV_BUFF_MAX_LEN - len, 0);
+                    if (recvResult == 0) {  // socket connection has been closed gracefully
+                        gui.setText(IDC_TCP_SERVER_STATUS, L"Device connection was lost!");
+                        break;  // Break out of the for loop
+                    } else if (recvResult == SOCKET_ERROR) {
+                        gui.setText(IDC_TCP_SERVER_STATUS, L"recv Error!", Gui::wsShow);
+                        break;  // Break out of the for loop
+                    } else {
+                        len += recvResult;
+                        // odebrano dane - dzielenie przetwarzanie
+                        while (len >= 4) {
+                            dlen = getDataLen((msg_type_t)buff[offs]);
+
+                            if (dlen > len) break;
+
+                            gui.procRecvData(this, &buff[offs], dlen);
+                            offs += dlen;
+                            len -= dlen;
+                        }
+                        if (len > 0) {
+                            memcpy(&buff[0], &buff[offs], len);
+                        }
+                    }
+                } else {
+                    vector<uint8_t> data;
+                    while (gui.popDataToSend(data)) {
+                        send(clientSocket, reinterpret_cast<const char *>(data.data()), data.size(), 0);
+                    }
                 }
             }
-        }
-        gui.disconnected(this);
-        if (INVALID_SOCKET != clientSocket) {
-            closesocket(clientSocket);
-            clientSocket = INVALID_SOCKET;
+            gui.disconnected(this);
+            if (INVALID_SOCKET != clientSocket) {
+                closesocket(clientSocket);
+                clientSocket = INVALID_SOCKET;
+            }
         }
     }
 

@@ -703,9 +703,9 @@ void Gui::connected(Server *server) {
     lock_guard<mutex> lock(serverMutex);
     if (connectedServer != server) {
         if (connectedServer != nullptr) connectedServer->disconnect();
-        setTrayIcon(IDI_LASER_ICON_OFF, L"Remote client connected!");
         connectedServer = server;
     }
+    setTrayIcon(IDI_LASER_ICON_OFF, L"Remote client connected!");
 }
 void Gui::disconnected(Server *server) {
     unique_lock<mutex> lock(serverMutex, try_to_lock);
