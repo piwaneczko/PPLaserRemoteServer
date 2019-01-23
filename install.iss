@@ -54,6 +54,9 @@ Name: Autostart; Description: "Run application at Windows Startup"; GroupDescrip
 Name: {app}; Permissions: users-full
          
 #include <idp.iss>
+        
+[InstallDelete]
+Type: files; Name: "{app}\*.*"
 
 [Files]           
 Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion 
