@@ -40,6 +40,7 @@ PrivilegesRequired=poweruser
 SetupIconFile=src\app\resources\laser_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=license.txt
+CloseApplications=force
 
 [Languages]
 Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
