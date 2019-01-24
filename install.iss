@@ -56,7 +56,11 @@ Name: {app}; Permissions: users-full
 #include <idp.iss>
         
 [InstallDelete]
+Type: filesandordirs; Name: "{pf}\Silsense Technologies"
 Type: files; Name: "{app}\*.*"
+                                   
+[UninstallDelete]     
+Type: files; Name: "{app}\{#MyAppName}.xml"
 
 [Files]           
 Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion 
