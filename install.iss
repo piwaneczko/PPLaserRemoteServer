@@ -56,14 +56,14 @@ Name: {app}; Permissions: users-full
 #include <idp.iss>
         
 [InstallDelete]
-Type: filesandordirs; Name: "{pf}\Silsense Technologies"
 Type: files; Name: "{app}\*.*"
-                                   
+Type: filesandordirs; Name: "{pf}\Silsense Technologies"
 [UninstallDelete]     
-Type: files; Name: "{app}\{#MyAppName}.xml"
+Type: files; Name: "{app}\*.*"
 
 [Files]           
 Source: "install\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion 
+Source: ppremote.cer; DestDir: {tmp}; Flags: deleteafterinstall
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
          
 [Icons]
@@ -85,6 +85,7 @@ end;
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Laser Remote Server"" dir=in action=allow program=""{app}\{#MyAppExeName}"" protocol=TCP enable=yes"; StatusMsg: "Adding exception to firewall for pragram: Laser Remote Server.exe..."; Flags: runhidden; Tasks: Firewall;
 Filename: "{tmp}\vc_redist.x86.exe"; Parameters: "/q /norestart"; StatusMsg: "Installing Visual C++ Redistributable Packages (x86)..."; Flags: runhidden
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "certutil.exe"; Parameters: "-addstore ""TrustedPublisher"" {tmp}\ppremote.cer"; StatusMsg: "Adding trusted publisher..." 
 
 [UninstallRun] 
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Laser Remote Server"""; Flags: runhidden; Tasks: Firewall; 

@@ -31,6 +31,7 @@ message(STATUS "Using Inno Setup Compiler from: ${ISS_COMPILER}")
 
 # Add installer target
 add_custom_target(InnoSetup COMMAND ${ISS_COMPILER} "${CMAKE_CURRENT_SOURCE_DIR}/install.iss" DEPENDS INSTALL VERBATIM)
+add_custom_command(TARGET InnoSetup POST_BUILD COMMAND powershell "Set-AuthenticodeSignature \"${CMAKE_INSTALL_PREFIX}/bin/ppremotesetup.exe\" -Certificate (Get-ChildItem Cert:\\CurrentUser\\My -CodeSigningCert)")
 add_custom_command(TARGET InnoSetup POST_BUILD COMMAND "${CMAKE_INSTALL_PREFIX}/bin/SaveFileInfo.exe" "${CMAKE_INSTALL_PREFIX}/bin/ppremotesetup.exe")
 endif()
 endif() 

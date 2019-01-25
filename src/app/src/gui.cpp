@@ -43,10 +43,11 @@ enum msg_key_type_t {
 #define CRC_INIT 0xFFFFu
 #define CRC_VALID 0xF0B8u
 
-XmlConfigValue<bool> ShowNotification("ShowNotification", true);
-XmlConfigValue<bool> SoundNotification("SoundNotification", false);
-XmlConfigValue<bool> TempDirectory("UpdateTemporaryDirectory", true);
-XmlConfigValue<uint32_t> AutoHide("Autohide time (milliseconds)", 3000);
+XmlConfigValue<bool> showNotification("ShowNotification", false);
+XmlConfigValue<bool> soundNotification("SoundNotification", false);
+XmlConfigValue<bool> tempDirectory("UpdateTemporaryDirectory", true);
+XmlConfigValue<bool> useMoveThread("UseMoveThread", true);
+XmlConfigValue<uint32_t> autoHide("Autohide time (milliseconds)", 4000);
 
 /**
  * Aktualizacja sumy kontrolnej
@@ -96,6 +97,7 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 break;
             case WM_POWERBROADCAST:
                 if (gui.connectedServer) gui.connectedServer->reset();
+                if (!gui.downloadThread.joinable()) gui.downloadThread = thread(&Gui::downloadLoop, &gui);
                 return 1;
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
@@ -263,7 +265,7 @@ void Gui::downloadLoop() {
             ShowWindow(hWnd, SW_SHOWDEFAULT);
             UpdateWindow(hWnd);
             setTrayIcon(IDI_UPDATE, L"Downloading started!", NIIF_INFO);
-            const auto result = downloader.DownloadAndUpdate(&onUpdateProgress, static_cast<void *>(&hWnd), TempDirectory);
+            const auto result = downloader.DownloadAndUpdate(&onUpdateProgress, static_cast<void *>(&hWnd), tempDirectory);
             switch (result) {
                 case S_OK:
                     setTrayIcon(IDI_UPDATE, L"Downloading ended!", NIIF_INFO);
@@ -282,6 +284,7 @@ void Gui::downloadLoop() {
             }
         }
     }
+    downloadThread.detach();
 }
 
 void Gui::showContextMenu(const HWND hWnd) {
@@ -305,16 +308,19 @@ void Gui::showContextMenu(const HWND hWnd) {
     }
 }
 
+long sign(long diff) {
+    if (diff == 0)
+        return 0;
+    else if (diff > 0)
+        return 1;
+    else
+        return -1;
+}
 void Gui::moveLoop() {
-    auto moveEnded = true;
     moveLoopIsRunning = true;
     POINT pv = {0, 0}, sp = {0, 0};
     while (moveLoopIsRunning) {
         if (!moveDeque.empty()) {
-            if (moveEnded) {
-                GetCursorPos(&pv);
-                sp = pv;
-            }
             lock_guard<mutex> lock(moveLocker);
             while (!moveDeque.empty()) {
                 const auto mp = moveDeque.front();
@@ -323,16 +329,14 @@ void Gui::moveLoop() {
                 moveDeque.pop_front();
             }
         }
-#define EP 0.5
         if (sp.x != pv.x || sp.y != pv.y) {
-            const auto ppv = pv;
-            pv.x = long(pv.x * (1.0 - EP) + sp.x * EP);
-            pv.y = long(pv.y * (1.0 - EP) + sp.y * EP);
-            mouseEvent(MOUSEEVENTF_MOVE, int(pv.x - ppv.x), int(pv.y - ppv.y));
-            this_thread::sleep_for(5ms);
+            const POINT e = {sign(sp.x - pv.x), sign(sp.y - pv.y)};
+            pv = {long(pv.x + e.x), long(pv.y + e.y)};
+            mouseEvent(MOUSEEVENTF_MOVE, int(e.x), int(e.y));
         } else if (moveDeque.empty()) {
-            moveEnded = true;
-            this_thread::sleep_for(100ms);
+            GetCursorPos(&pv);
+            sp = pv;
+            this_thread::sleep_for(1ms);
         }
     }
 }
@@ -352,8 +356,8 @@ bool Gui::setTrayIcon(int iconId, const wstring &info, int nifIconFlag) {
         niData.hIcon = HICON(
             LoadImage(hInstance, MAKEINTRESOURCE(iconId), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
     }
-    niData.uFlags = NIF_ICON | (ShowNotification ? (NIF_TIP | NIF_INFO | NIF_MESSAGE) : 0);
-    niData.dwInfoFlags = (SoundNotification ? 0 : NIIF_NOSOUND) | nifIconFlag;
+    niData.uFlags = NIF_ICON | (showNotification ? (NIF_TIP | NIF_INFO | NIF_MESSAGE) : 0);
+    niData.dwInfoFlags = (soundNotification ? 0 : NIIF_NOSOUND) | nifIconFlag;
 
     // Show the notification.;
     const auto result = (Shell_NotifyIcon(hidden ? NIM_ADD : NIM_MODIFY, &niData) == TRUE);
@@ -379,7 +383,7 @@ bool Gui::setText(int textBoxId, const wstring &text, window_state windowState) 
             ShowWindow(hWnd, SW_HIDE);
             break;
         case Gui::wsTimedHide:
-            if (AutoHide > 0u) result &= SetTimer(hWnd, ID_TIMER, AutoHide, nullptr);
+            if (autoHide > 0u) result &= SetTimer(hWnd, ID_TIMER, autoHide, nullptr);
             break;
         default:
             break;
@@ -410,7 +414,7 @@ size_t debugGoodCount = 0;
 size_t debugBadCount = 0;
 #endif
 enum KeyClickFlag { key_down, key_up, key_both };
-void keybd_event(uint16_t keyCode, KeyClickFlag flag = key_both, uint8_t scancode = 0) {
+void keyboardEvent(uint16_t keyCode, KeyClickFlag flag = key_both, uint8_t scancode = 0) {
     INPUT ip;
     ip.type = INPUT_KEYBOARD;
     ip.ki.dwExtraInfo = 0;
@@ -495,21 +499,21 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                 case msg_type_button:
                     switch (data[1]) {
                         case msg_key_type_esc:
-                            keybd_event(VK_ESCAPE);
+                            keyboardEvent(VK_ESCAPE);
                             break;
                         case msg_key_type_f5:
-                            keybd_event(VK_F5);
+                            keyboardEvent(VK_F5);
                             break;
                         case msg_key_type_shf5:
-                            keybd_event(VK_LSHIFT, key_down);
-                            keybd_event(VK_F5);
-                            keybd_event(VK_LSHIFT, key_up);
+                            keyboardEvent(VK_LSHIFT, key_down);
+                            keyboardEvent(VK_F5);
+                            keyboardEvent(VK_LSHIFT, key_up);
                             break;
                         case msg_key_type_prev:
-                            keybd_event(VK_LEFT);
+                            keyboardEvent(VK_LEFT);
                             break;
                         case msg_key_type_next:
-                            keybd_event(VK_RIGHT);
+                            keyboardEvent(VK_RIGHT);
                             break;
                         case msg_key_type_left_down:
                             mouseEvent(MOUSEEVENTF_LEFTDOWN);
@@ -524,11 +528,11 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                             mouseEvent(MOUSEEVENTF_RIGHTUP);
                             break;
                         case msg_key_type_volume_down: {
-                            keybd_event(VK_VOLUME_DOWN);
+                            keyboardEvent(VK_VOLUME_DOWN);
                             if (volume_ < 1.0f) sendCurrentVolume();
                         } break;
                         case msg_key_type_volume_up: {
-                            keybd_event(VK_VOLUME_UP);
+                            keyboardEvent(VK_VOLUME_UP);
                             if (volume_ > 99.0f) sendCurrentVolume();
                         } break;
                         case msg_key_type_zoom_in:
@@ -551,16 +555,16 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                                     dd.cb = sizeof(DISPLAY_DEVICE);
                                 }
                             }
-                            keybd_event(VK_LWIN, key_down);
-                            keybd_event(VK_ADD);
-                            keybd_event(VK_LWIN, key_up);
+                            keyboardEvent(VK_LWIN, key_down);
+                            keyboardEvent(VK_ADD);
+                            keyboardEvent(VK_LWIN, key_up);
                             zoomCount++;
                             break;
                         case msg_key_type_zoom_out:
                             if (zoomCount > 1) {
-                                keybd_event(VK_LWIN, key_down);
-                                keybd_event(zoomCount == 2 ? VK_ESCAPE : VK_SUBTRACT);
-                                keybd_event(VK_LWIN, key_up);
+                                keyboardEvent(VK_LWIN, key_down);
+                                keyboardEvent(zoomCount == 2 ? VK_ESCAPE : VK_SUBTRACT);
+                                keyboardEvent(VK_LWIN, key_up);
                                 zoomCount--;
                                 if (zoomCount == 1) {
                                     // poprzedni
@@ -577,7 +581,7 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                 case msg_type_laser:
                     if (data[1]) {
                         setTrayIcon(IDI_LASER_ICON_ON, L"");
-                        keybd_event(VK_LCONTROL, key_down);
+                        keyboardEvent(VK_LCONTROL, key_down);
                         if ((eventReceived - lastEventReceived) < 5000) {
                             // bez zmiany pozycji
                             mouseEvent(MOUSEEVENTF_LEFTDOWN);
@@ -587,7 +591,7 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         }
                     } else {
                         setTrayIcon(IDI_LASER_ICON_OFF, L"");
-                        keybd_event(VK_LCONTROL, key_up);
+                        keyboardEvent(VK_LCONTROL, key_up);
                         mouseEvent(MOUSEEVENTF_LEFTUP);
                     }
                     break;
@@ -596,9 +600,11 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         memcpy(&ints[0], &data[1], 8);
                         dx = int(float(ints[0]) * screens[0].width / (zoomCount * 1000000.0f));
                         dy = int(float(ints[1]) * screens[0].height / (zoomCount * 1000000.0f));
-                        // mouseEvent(MOUSEEVENTF_MOVE, dx, dy);
-                        lock_guard<mutex> lock(moveLocker);
-                        moveDeque.push_back(POINT{dx, dy});
+                        if (useMoveThread) {
+                            lock_guard<mutex> lock(moveLocker);
+                            moveDeque.push_back(POINT{dx, dy});
+                        } else
+                            mouseEvent(MOUSEEVENTF_MOVE, dx, dy);
                     }
                     break;
                 case msg_type_wheel:
@@ -614,9 +620,11 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         memcpy(&ints, &data[1], 8);
                         dx = int(float(ints[0]) / (zoomCount * 1000000.0f) * screens[0].width / float(M_PI / 3.0));
                         dy = int(float(ints[1]) / (zoomCount * 1000000.0f) * screens[0].width / float(M_PI / 3.0));
-                        mouseEvent(MOUSEEVENTF_MOVE, dx, dy);
-                        lock_guard<mutex> lock(moveLocker);
-                        moveDeque.push_back(POINT{dx, dy});
+                        if (useMoveThread) {
+                            lock_guard<mutex> lock(moveLocker);
+                            moveDeque.push_back(POINT{dx, dy});
+                        } else
+                            mouseEvent(MOUSEEVENTF_MOVE, dx, dy);
                     }
                     break;
                 case msg_type_keyboard:
@@ -683,10 +691,10 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                             case VK_F22:
                             case VK_F23:
                             case VK_F24:
-                                keybd_event(byteKeyCode, key_both, 1);
+                                keyboardEvent(byteKeyCode, key_both, 1);
                                 break;
                             default:
-                                keybd_event(keyCode, key_down, 2);
+                                keyboardEvent(keyCode, key_down, 2);
                                 break;
                         }
                     }
