@@ -15,8 +15,6 @@
  */
 class BluetoothServer : public Server {
     void mainLoop() override;
-    void init() override;
-    void destroy() override;
 
 public:
     /**

@@ -44,13 +44,10 @@ enum server_type_en { stUnspecified, stBluetooth, stTCP };
 class Server {
 protected:
     Gui &gui;
-    thread listenThread, resetThread;
+    thread listenThread;
     uint32_t listenSocket = INVALID_SOCKET, clientSocket = INVALID_SOCKET;
     bool mainLoopIsRunning = false;
     virtual void mainLoop() = 0;
-    virtual void init() = 0;
-    virtual void destroy() = 0;
-    void resetLoop();
 
     server_type_en serverType = stUnspecified;
     static uint16_t getDataLen(msg_type_t type);
@@ -67,10 +64,6 @@ public:
      * Disconnecting client with shutdown (R&W)
      */
     void disconnect();
-    /**
-     * Resets the mainLoop and listenSocket
-     */
-    void reset();
 };
 
 /* Struktura prostok¹tu monitora */

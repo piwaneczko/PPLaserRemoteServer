@@ -96,9 +96,8 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
                 break;
             case WM_POWERBROADCAST:
-                if (gui.connectedServer) gui.connectedServer->reset();
                 if (!gui.downloadThread.joinable()) gui.downloadThread = thread(&Gui::downloadLoop, &gui);
-                return 1;
+                return 0;
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
                     case SWM_SHOW:
@@ -205,12 +204,10 @@ Gui::Gui()
     EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, LPARAM(this));
     assert(screens.size() > 0);
     lastEventReceived = 0;
-    downloadThread = thread(&Gui::downloadLoop, this);
 
     SetThreadExecutionState(ES_SYSTEM_REQUIRED);
 
-    bluetoothServer = make_unique<BluetoothServer>(*this);
-    tcpServer = make_unique<TCPServer>(*this);
+    downloadThread = thread(&Gui::downloadLoop, this);
     moveThread = thread(&Gui::moveLoop, this);
 }
 Gui::~Gui() {
@@ -253,6 +250,11 @@ void onUpdateProgress(float value, void *user) {
     }
 }
 void Gui::downloadLoop() {
+    tcpServer.reset();
+    bluetoothServer.reset();
+    tcpServer = make_unique<TCPServer>(*this);
+    bluetoothServer = make_unique<BluetoothServer>(*this);
+
     auto version = downloader.CheckVersion(UD_CHECK_BASE);
     if (!version.empty()) {
         KillTimer(hWnd, ID_TIMER);
@@ -755,16 +757,6 @@ void Server::disconnect() {
         shutdown(clientSocket, SD_BOTH);
         clientSocket = INVALID_SOCKET;
     }
-}
-
-void Server::resetLoop() {
-    destroy();
-    init();
-    resetThread.detach();
-}
-
-void Server::reset() {
-    resetThread = thread(&Server::resetLoop, this);
 }
 
 wstring s2ws(const string &s) {
