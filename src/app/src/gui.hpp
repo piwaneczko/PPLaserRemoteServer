@@ -90,7 +90,7 @@ private:
     unique_ptr<Server> tcpServer;
     deque<ScrrenRect> screens;
     mutex serverMutex;
-    HWND hWnd;
+    HWND hWnd, settingsHwnd;
     bool hidden;
     HINSTANCE hInstance;
     NOTIFYICONDATA niData;

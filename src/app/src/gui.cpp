@@ -65,6 +65,24 @@ static uint16_t CrcUpdate(uint16_t crc, uint8_t byte) {
     return crc;
 }
 
+BOOL CALLBACK SettingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_COMMAND:
+            switch (LOWORD(wParam)) {
+                case IDOK:
+                    return 1;
+                case IDCANCEL:
+                    EndDialog(hWnd, wParam);
+                    return 1;
+                default:
+                    break;
+            }
+        default:
+            return DefWindowProc(hWnd, msg, wParam, lParam);
+    }
+    return 0;
+}
+
 LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
         auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
@@ -105,17 +123,27 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         break;
                     case SWM_HIDE:
                     case IDOK:
-                        ShowWindow(hWnd, SW_HIDE);
+                        if (hWnd == gui.hWnd)
+                            ShowWindow(hWnd, SW_HIDE);
+                        else {
+                            // Save Settings
+                            return 0;
+                        }
                         break;
-                    case SWM_SETT: {
-                        wchar_t appFileName[MAX_PATH];
-                        GetModuleFileName(nullptr, appFileName, MAX_PATH);
-                        const auto xmlFilePath = wstring(appFileName) + L".xml";
-                        ShellExecute(nullptr, L"open", xmlFilePath.c_str(), nullptr, nullptr, SW_SHOW);
-                    } break;
+                    case SWM_SETT:
+                        if (IsWindowVisible(gui.settingsHwnd)) {
+                            ShowWindow(gui.settingsHwnd, SW_HIDE);
+                        } else {
+                            ShowWindow(gui.settingsHwnd, SW_SHOW);
+                            UpdateWindow(gui.settingsHwnd);
+                        }
+                        break;
                     case SWM_EXIT:
                         DestroyWindow(hWnd);
                         break;
+                    case IDCANCEL:
+                        EndDialog(hWnd, wParam);
+                        return 1;
                     default:
                         break;
                 }
@@ -167,14 +195,18 @@ Gui::Gui()
       volume_(audioVolume.volume()) {
     hInstance = GetModuleHandle(nullptr);
     hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), nullptr, DLGPROC(DlgProc));
+    settingsHwnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG_SETTINGS), hWnd, DLGPROC(DlgProc));
 
     auto hIcon = HICON(LoadImage(hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE));
     SendMessage(hWnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
     SendMessage(hWnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
+    SendMessage(settingsHwnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
+    SendMessage(settingsHwnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
 
     if (hWnd == nullptr) exit(1);
 
     SetWindowLongPtr(hWnd, GWLP_USERDATA, LONG(this));
+    SetWindowLongPtr(settingsHwnd, GWLP_USERDATA, LONG(this));
 
     // Declare NOTIFYICONDATA details.
     // Error handling is omitted here for brevity. Do not omit it in your code.
