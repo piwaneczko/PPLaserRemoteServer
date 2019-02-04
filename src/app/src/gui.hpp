@@ -99,6 +99,7 @@ private:
     friend BOOL CALLBACK monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
     void showContextMenu(HWND hWnd) const;
     void initDialog(HWND hWnd) const;
+    void saveSettings() const;
 
     // Move inertion
     bool moveLoopIsRunning;

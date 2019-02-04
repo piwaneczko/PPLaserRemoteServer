@@ -68,19 +68,17 @@ LRESULT CALLBACK settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
         auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
         switch (msg) {
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN) {
+                    gui.saveSettings();
+                    return 1;
+                }
+                break;
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
-                    case IDOK: {
-                        // Save settings
-                        showNotification = SendDlgItemMessage(gui.settingsHwnd, IDC_SHOW_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
-                        soundNotification = SendDlgItemMessage(gui.settingsHwnd, IDC_SOUND_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
-                        useMoveThread = SendDlgItemMessage(gui.settingsHwnd, IDC_USE_MOVE_THREAD, BM_GETCHECK, 0, 0) == BST_CHECKED;
-                        wchar_t text[MAX_PATH] = {0};
-                        int len = GetDlgItemText(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, text, MAX_PATH);
-                        autoHide = uint32_t(stol(wstring(text, len)));
-                        EndDialog(hWnd, wParam);
+                    case IDOK:
+                        gui.saveSettings();
                         return 1;
-                    }
                     case IDCANCEL:
                         EndDialog(hWnd, wParam);
                         return 1;
@@ -151,7 +149,7 @@ LRESULT CALLBACK dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                                     gui.settingsHwnd, IDC_SOUND_NOTIFICATION, BM_SETCHECK, soundNotification ? BST_CHECKED : BST_UNCHECKED, 0);
                                 SendDlgItemMessage(
                                     gui.settingsHwnd, IDC_USE_MOVE_THREAD, BM_SETCHECK, useMoveThread ? BST_CHECKED : BST_UNCHECKED, 0);
-                                SetDlgItemText(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, to_wstring(autoHide()).c_str());
+                                SetDlgItemInt(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, autoHide, FALSE);
                                 gui.initDialog(gui.settingsHwnd);
                                 ShowWindow(gui.settingsHwnd, SW_SHOW);
                             }
@@ -354,6 +352,21 @@ void Gui::initDialog(HWND hWnd) const {
     SendMessage(hWnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
     SendMessage(hWnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
     SetWindowLongPtr(hWnd, GWLP_USERDATA, LONG(this));
+}
+
+void Gui::saveSettings() const {
+    // Save settings
+    showNotification = SendDlgItemMessage(settingsHwnd, IDC_SHOW_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    soundNotification = SendDlgItemMessage(settingsHwnd, IDC_SOUND_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    useMoveThread = SendDlgItemMessage(settingsHwnd, IDC_USE_MOVE_THREAD, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    BOOL success;
+    const auto time = GetDlgItemInt(settingsHwnd, IDC_AUTO_HIDE_TIME, &success, FALSE);
+    if (success) {
+        autoHide = time;
+        EndDialog(hWnd, TRUE);
+    } else {
+        SetDlgItemInt(settingsHwnd, IDC_AUTO_HIDE_TIME, autoHide, FALSE);
+    }
 }
 
 long sign(long diff) {
