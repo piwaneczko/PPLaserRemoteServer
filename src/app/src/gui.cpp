@@ -43,11 +43,11 @@ enum msg_key_type_t {
 #define CRC_INIT 0xFFFFu
 #define CRC_VALID 0xF0B8u
 
-XmlConfigValue<bool> showNotification("ShowNotification", false);
-XmlConfigValue<bool> soundNotification("SoundNotification", false);
+XmlConfigValue<bool, XmlConfigReadWriteFlag> showNotification("ShowNotification", false);
+XmlConfigValue<bool, XmlConfigReadWriteFlag> soundNotification("SoundNotification", false);
 XmlConfigValue<bool> tempDirectory("UpdateTemporaryDirectory", true);
-XmlConfigValue<bool> useMoveThread("UseMoveThread", true);
-XmlConfigValue<uint32_t> autoHide("Autohide time (milliseconds)", 4000);
+XmlConfigValue<bool, XmlConfigReadWriteFlag> useMoveThread("UseMoveThread", true);
+XmlConfigValue<uint32_t, XmlConfigReadWriteFlag> autoHide("Autohide time (milliseconds)", 4000);
 
 /**
  * Aktualizacja sumy kontrolnej
@@ -64,26 +64,40 @@ static uint16_t CrcUpdate(uint16_t crc, uint8_t byte) {
     crc ^= uint16_t(h >> 4);
     return crc;
 }
-
-BOOL CALLBACK SettingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-        case WM_COMMAND:
-            switch (LOWORD(wParam)) {
-                case IDOK:
-                    return 1;
-                case IDCANCEL:
-                    EndDialog(hWnd, wParam);
-                    return 1;
-                default:
-                    break;
-            }
-        default:
-            return DefWindowProc(hWnd, msg, wParam, lParam);
+LRESULT CALLBACK settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
+        auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+        switch (msg) {
+            case WM_COMMAND:
+                switch (LOWORD(wParam)) {
+                    case IDOK: {
+                        // Save settings
+                        showNotification = SendDlgItemMessage(gui.settingsHwnd, IDC_SHOW_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                        soundNotification = SendDlgItemMessage(gui.settingsHwnd, IDC_SOUND_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                        useMoveThread = SendDlgItemMessage(gui.settingsHwnd, IDC_USE_MOVE_THREAD, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                        wchar_t text[MAX_PATH] = {0};
+                        int len = GetDlgItemText(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, text, MAX_PATH);
+                        autoHide = uint32_t(stol(wstring(text, len)));
+                        EndDialog(hWnd, wParam);
+                        return 1;
+                    }
+                    case IDCANCEL:
+                        EndDialog(hWnd, wParam);
+                        return 1;
+                    default:
+                        return DefWindowProc(hWnd, msg, wParam, lParam);
+                }
+            case WM_DESTROY:
+                DestroyWindow(hWnd);
+                break;
+            default:
+                break;
+        }
     }
     return 0;
 }
 
-LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
         auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
         switch (msg) {
@@ -93,15 +107,15 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         if (IsWindowVisible(hWnd)) {
                             ShowWindow(hWnd, SW_HIDE);
                         } else {
+                            EndDialog(gui.settingsHwnd, FALSE);
                             ShowWindow(hWnd, SW_RESTORE);
-                            UpdateWindow(hWnd);
                         }
                         return 1;
                     case WM_RBUTTONDOWN:
                     case WM_CONTEXTMENU:
                         gui.showContextMenu(hWnd);
                     default:
-                        break;
+                        return DefWindowProc(hWnd, msg, wParam, lParam);
                 }
                 break;
             case WM_SYSCOMMAND:
@@ -119,33 +133,35 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
                     case SWM_SHOW:
+                        EndDialog(gui.settingsHwnd, FALSE);
                         ShowWindow(hWnd, SW_RESTORE);
                         break;
                     case SWM_HIDE:
                     case IDOK:
-                        if (hWnd == gui.hWnd)
-                            ShowWindow(hWnd, SW_HIDE);
-                        else {
-                            // Save Settings
-                            return 0;
-                        }
+                        ShowWindow(hWnd, SW_HIDE);
                         break;
                     case SWM_SETT:
-                        if (IsWindowVisible(gui.settingsHwnd)) {
-                            ShowWindow(gui.settingsHwnd, SW_HIDE);
-                        } else {
-                            ShowWindow(gui.settingsHwnd, SW_SHOW);
-                            UpdateWindow(gui.settingsHwnd);
+                        if (!IsWindowVisible(gui.settingsHwnd)) {
+                            EndDialog(gui.hWnd, TRUE);
+                            gui.settingsHwnd = CreateDialog(gui.hInstance, MAKEINTRESOURCE(IDD_DIALOG_SETTINGS), gui.hWnd, DLGPROC(settingsProc));
+                            if (gui.settingsHwnd) {
+                                SendDlgItemMessage(
+                                    gui.settingsHwnd, IDC_SHOW_NOTIFICATION, BM_SETCHECK, showNotification ? BST_CHECKED : BST_UNCHECKED, 0);
+                                SendDlgItemMessage(
+                                    gui.settingsHwnd, IDC_SOUND_NOTIFICATION, BM_SETCHECK, soundNotification ? BST_CHECKED : BST_UNCHECKED, 0);
+                                SendDlgItemMessage(
+                                    gui.settingsHwnd, IDC_USE_MOVE_THREAD, BM_SETCHECK, useMoveThread ? BST_CHECKED : BST_UNCHECKED, 0);
+                                SetDlgItemText(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, to_wstring(autoHide()).c_str());
+                                gui.initDialog(gui.settingsHwnd);
+                                ShowWindow(gui.settingsHwnd, SW_SHOW);
+                            }
                         }
                         break;
                     case SWM_EXIT:
                         DestroyWindow(hWnd);
                         break;
-                    case IDCANCEL:
-                        EndDialog(hWnd, wParam);
-                        return 1;
                     default:
-                        break;
+                        return DefWindowProc(hWnd, msg, wParam, lParam);
                 }
                 return 1;
             case WM_TIMER:
@@ -171,10 +187,9 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return DefWindowProc(hWnd, msg, wParam, lParam);
         }
     }
-
     return 0;
 }
-BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
+BOOL CALLBACK monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
     // uzyskanie wskaŸnika na glemm
     auto gui = reinterpret_cast<Gui *>(dwData);
 
@@ -194,19 +209,11 @@ Gui::Gui()
       audioVolume(this),
       volume_(audioVolume.volume()) {
     hInstance = GetModuleHandle(nullptr);
-    hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), nullptr, DLGPROC(DlgProc));
-    settingsHwnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG_SETTINGS), hWnd, DLGPROC(DlgProc));
-
-    auto hIcon = HICON(LoadImage(hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE));
-    SendMessage(hWnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
-    SendMessage(hWnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
-    SendMessage(settingsHwnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
-    SendMessage(settingsHwnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
+    hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), nullptr, DLGPROC(dlgProc));
 
     if (hWnd == nullptr) exit(1);
 
-    SetWindowLongPtr(hWnd, GWLP_USERDATA, LONG(this));
-    SetWindowLongPtr(settingsHwnd, GWLP_USERDATA, LONG(this));
+    initDialog(hWnd);
 
     // Declare NOTIFYICONDATA details.
     // Error handling is omitted here for brevity. Do not omit it in your code.
@@ -233,7 +240,7 @@ Gui::Gui()
     UpdateWindow(hWnd);
 
     // utworzenie okien na ka¿dym monitorze
-    EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, LPARAM(this));
+    EnumDisplayMonitors(nullptr, nullptr, monitorEnumProc, LPARAM(this));
     assert(screens.size() > 0);
     lastEventReceived = 0;
 
@@ -321,7 +328,7 @@ void Gui::downloadLoop() {
     downloadThread.detach();
 }
 
-void Gui::showContextMenu(const HWND hWnd) {
+void Gui::showContextMenu(const HWND hWnd) const {
     POINT pt;
     GetCursorPos(&pt);
     const auto hMenu = CreatePopupMenu();
@@ -330,7 +337,7 @@ void Gui::showContextMenu(const HWND hWnd) {
             InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_HIDE, L"Hide");
         else
             InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SHOW, L"Show");
-        InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SETT, L"Settings");
+        if (!IsWindowVisible(settingsHwnd)) InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SETT, L"Settings");
         InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_EXIT, L"Exit");
 
         // note:	must set window to the foreground or the
@@ -340,6 +347,13 @@ void Gui::showContextMenu(const HWND hWnd) {
         TrackPopupMenu(hMenu, TPM_BOTTOMALIGN, pt.x, pt.y, 0, hWnd, nullptr);
         DestroyMenu(hMenu);
     }
+}
+
+void Gui::initDialog(HWND hWnd) const {
+    auto hIcon = HICON(LoadImage(hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE));
+    SendMessage(hWnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
+    SendMessage(hWnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, LONG(this));
 }
 
 long sign(long diff) {
@@ -375,7 +389,7 @@ void Gui::moveLoop() {
     }
 }
 
-void Gui::mainLoop() {
+void Gui::mainLoop() const {
     // Pêtla komunikatów
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {

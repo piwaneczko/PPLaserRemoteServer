@@ -94,9 +94,11 @@ private:
     bool hidden;
     HINSTANCE hInstance;
     NOTIFYICONDATA niData;
-    friend LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    friend BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
-    static void showContextMenu(HWND hWnd);
+    friend LRESULT CALLBACK dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    friend LRESULT CALLBACK settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    friend BOOL CALLBACK monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
+    void showContextMenu(HWND hWnd) const;
+    void initDialog(HWND hWnd) const;
 
     // Move inertion
     bool moveLoopIsRunning;
@@ -128,7 +130,7 @@ public:
     /**
      * Pêtla g³ówna przetwarzaj¹ca komunikaty systemowe. Koñczy siê po zamkniêciu aplikacji
      */
-    static void mainLoop();
+    void mainLoop() const;
     /**
      * Modyfikacja obrazu oraz tekstu informacyjnego ikony w pasku systemowym
      * \param[in] iconId     Identyfikator ikony. Wartoœci od 101 do 105

@@ -35,7 +35,6 @@
 #define IDC_USE_MOVE_THREAD             1028
 #define IDC_AUTO_HIDE_TIME_LABEL        1029
 #define IDC_AUTO_HIDE_TIME              1030
-#define IDSETTOK                        1031
 
 // Next default values for new objects
 // 
