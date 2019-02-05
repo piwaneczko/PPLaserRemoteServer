@@ -94,8 +94,8 @@ private:
     bool hidden;
     HINSTANCE hInstance;
     NOTIFYICONDATA niData;
-    friend LRESULT CALLBACK dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    friend LRESULT CALLBACK settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
     friend BOOL CALLBACK monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
     void showContextMenu(HWND hWnd) const;
     void initDialog(HWND hWnd) const;

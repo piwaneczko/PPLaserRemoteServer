@@ -64,30 +64,22 @@ static uint16_t CrcUpdate(uint16_t crc, uint8_t byte) {
     crc ^= uint16_t(h >> 4);
     return crc;
 }
-LRESULT CALLBACK settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+
+LRESULT CALLBACK Gui::settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
         auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
         switch (msg) {
-            case WM_KEYDOWN:
-                if (wParam == VK_RETURN) {
-                    gui.saveSettings();
-                    return 1;
-                }
-                break;
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
                     case IDOK:
                         gui.saveSettings();
-                        return 1;
+                        return 0;
                     case IDCANCEL:
                         EndDialog(hWnd, wParam);
-                        return 1;
+                        return 0;
                     default:
                         return DefWindowProc(hWnd, msg, wParam, lParam);
                 }
-            case WM_DESTROY:
-                DestroyWindow(hWnd);
-                break;
             default:
                 break;
         }
@@ -95,7 +87,7 @@ LRESULT CALLBACK settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
-LRESULT CALLBACK dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
         auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
         switch (msg) {
@@ -150,6 +142,7 @@ LRESULT CALLBACK dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                                 SendDlgItemMessage(
                                     gui.settingsHwnd, IDC_USE_MOVE_THREAD, BM_SETCHECK, useMoveThread ? BST_CHECKED : BST_UNCHECKED, 0);
                                 SetDlgItemInt(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, autoHide, FALSE);
+
                                 gui.initDialog(gui.settingsHwnd);
                                 ShowWindow(gui.settingsHwnd, SW_SHOW);
                             }
@@ -204,6 +197,7 @@ Gui::Gui()
                  L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.exe"),
       zoomCount(1),
       hidden(),
+      settingsHwnd(),
       audioVolume(this),
       volume_(audioVolume.volume()) {
     hInstance = GetModuleHandle(nullptr);
@@ -363,7 +357,7 @@ void Gui::saveSettings() const {
     const auto time = GetDlgItemInt(settingsHwnd, IDC_AUTO_HIDE_TIME, &success, FALSE);
     if (success) {
         autoHide = time;
-        EndDialog(hWnd, TRUE);
+        EndDialog(settingsHwnd, TRUE);
     } else {
         SetDlgItemInt(settingsHwnd, IDC_AUTO_HIDE_TIME, autoHide, FALSE);
     }
