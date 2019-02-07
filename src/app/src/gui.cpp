@@ -385,7 +385,15 @@ void Gui::moveLoop() {
             }
         }
         if (sp.x != pv.x || sp.y != pv.y) {
-            const POINT e = {sign(sp.x - pv.x), sign(sp.y - pv.y)};
+            POINT e = {sign(sp.x - pv.x), sign(sp.y - pv.y)};
+            const auto dx = sp.x - pv.x;
+            const auto dy = sp.y - pv.y;
+            if (dx > 0 && dy > 0) {
+                if (dx > dy)
+                    e.x *= dx / dy;
+                else
+                    e.y *= dy / dx;
+            }
             pv = {long(pv.x + e.x), long(pv.y + e.y)};
             mouseEvent(MOUSEEVENTF_MOVE, int(e.x), int(e.y));
         } else if (moveDeque.empty()) {
