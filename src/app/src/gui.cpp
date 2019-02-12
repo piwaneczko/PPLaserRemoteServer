@@ -8,6 +8,7 @@
 #include <ShObjIdl.h>
 #include <assert.h>
 #include <math.h>
+#include <ctime>
 #include <future>
 #include "BluetoothServer.hpp"
 #include "TCPServer.hpp"
@@ -118,7 +119,10 @@ LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
                 break;
             case WM_POWERBROADCAST:
-                if (!gui.downloadThread.joinable()) gui.downloadThread = thread(&Gui::downloadLoop, &gui);
+                if (clock() > 60 * CLOCKS_PER_SEC)
+                    *static_cast<int *>(nullptr) = 0;
+                else if (!gui.downloadThread.joinable())
+                    gui.downloadThread = thread(&Gui::downloadLoop, &gui);
                 return 0;
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
@@ -206,6 +210,8 @@ Gui::Gui()
     if (hWnd == nullptr) exit(1);
 
     initDialog(hWnd);
+    RegisterApplicationRestart(L"", NULL);
+    // TODO - icon to update
 
     // Declare NOTIFYICONDATA details.
     // Error handling is omitted here for brevity. Do not omit it in your code.
