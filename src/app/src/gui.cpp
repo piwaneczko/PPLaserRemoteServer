@@ -13,6 +13,7 @@
 #include "BluetoothServer.hpp"
 #include "TCPServer.hpp"
 #include "XmlConfig.hpp"
+#include "hibernatehandler.hpp"
 #include "resource.h"
 
 using namespace std;
@@ -38,7 +39,14 @@ enum msg_key_type_t {
     msg_key_type_volume_up = 10,
     msg_key_type_zoom_in = 11,
     msg_key_type_zoom_out = 12,
-    msg_key_type_pause = 13
+    msg_key_type_pause = 13,
+    msg_key_type_mute = 14,
+    msg_key_type_media_select = 15,
+    msg_key_type_media_next = 16,
+    msg_key_type_media_prev = 17,
+    msg_key_type_media_stop = 18,
+    msg_key_type_media_play = 19,
+    msg_key_type_hibernate = 20
 };
 
 #define CRC_INIT 0xFFFFu
@@ -108,7 +116,6 @@ LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     default:
                         return DefWindowProc(hWnd, msg, wParam, lParam);
                 }
-                break;
             case WM_SYSCOMMAND:
                 if ((wParam & 0xFFF0) == SC_MINIMIZE) {
                     ShowWindow(hWnd, SW_HIDE);
@@ -323,6 +330,7 @@ void Gui::downloadLoop() {
             }
         }
     }
+    windowState(autoHide > 0u ? wsTimedHide : wsHide);
     downloadThread.detach();
 }
 
@@ -366,6 +374,22 @@ void Gui::saveSettings() const {
         EndDialog(settingsHwnd, TRUE);
     } else {
         SetDlgItemInt(settingsHwnd, IDC_AUTO_HIDE_TIME, autoHide, FALSE);
+    }
+}
+
+void Gui::windowState(window_state state) const {
+    switch (state) {
+        case wsShow:
+            ShowWindow(hWnd, SW_SHOWDEFAULT);
+            break;
+        case wsHide:
+            ShowWindow(hWnd, SW_HIDE);
+            break;
+        case wsTimedHide:
+            if (autoHide > 0u) SetTimer(hWnd, ID_TIMER, autoHide, nullptr);
+            break;
+        default:
+            break;
     }
 }
 
@@ -441,24 +465,9 @@ bool Gui::hideTrayIcon() {
     hidden = (Shell_NotifyIcon(NIM_DELETE, &niData) == TRUE);
     return hidden;
 }
-bool Gui::setText(int textBoxId, const wstring &text, window_state windowState) const {
-    const auto textBox = GetDlgItem(hWnd, textBoxId);
-    auto result = TRUE;
-    switch (windowState) {
-        case Gui::wsShow:
-            ShowWindow(hWnd, SW_SHOWDEFAULT);
-            break;
-        case Gui::wsHide:
-            ShowWindow(hWnd, SW_HIDE);
-            break;
-        case Gui::wsTimedHide:
-            if (autoHide > 0u) result &= SetTimer(hWnd, ID_TIMER, autoHide, nullptr);
-            break;
-        default:
-            break;
-    }
-    result &= SendMessage(textBox, WM_SETTEXT, 0, LPARAM(text.c_str()));
-    return (result == TRUE);
+bool Gui::setText(int textBoxId, const wstring &text, window_state state) const {
+    windowState(state);
+    return SendMessage(GetDlgItem(hWnd, textBoxId), WM_SETTEXT, 0, LPARAM(text.c_str())) != 0;
 }
 
 BOOL CALLBACK KillScreenSaverFunc(HWND hwnd, LPARAM lParam) {
@@ -565,8 +574,9 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
             const auto eventReceived = clock();
             // przetwarzanie danych tylko z pierwszego serwera
             switch (data[0]) {
-                case msg_type_button:
-                    switch (data[1]) {
+                case msg_type_button: {
+                    const auto type = msg_key_type_t(data[1]);
+                    switch (type) {
                         case msg_key_type_esc:
                             keyboardEvent(VK_ESCAPE);
                             break;
@@ -643,10 +653,31 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         case msg_key_type_pause:
                             keybd_event(BYTE(VkKeyScan('B')), 0xB0, 0, 0);
                             break;
+                        case msg_key_type_mute:
+                            keyboardEvent(VK_VOLUME_MUTE);
+                            break;
+                        case msg_key_type_media_select:
+                            keyboardEvent(VK_LAUNCH_MEDIA_SELECT);
+                            break;
+                        case msg_key_type_media_next:
+                            keyboardEvent(VK_MEDIA_NEXT_TRACK);
+                            break;
+                        case msg_key_type_media_prev:
+                            keyboardEvent(VK_MEDIA_PREV_TRACK);
+                            break;
+                        case msg_key_type_media_stop:
+                            keyboardEvent(VK_MEDIA_STOP);
+                            break;
+                        case msg_key_type_media_play:
+                            keyboardEvent(VK_MEDIA_PLAY_PAUSE);
+                            break;
+                        case msg_key_type_hibernate:
+                            HibernateHandler::hibernate();
+                            break;
                         default:
                             break;
                     }
-                    break;
+                } break;
                 case msg_type_laser:
                     if (data[1]) {
                         setTrayIcon(IDI_LASER_ICON_ON, L"");

@@ -13,6 +13,7 @@ set (HEADERS src/bluetoothserver.hpp
              src/logger.hpp
              src/gui.hpp
              src/audiovolume.hpp
+             src/hibernatehandler.hpp
              src/resource.h)
 set (RESOURCES resources/ppremote.rc
                resources/bluetooth.ico
@@ -44,7 +45,7 @@ include_directories (src resources)
 
 add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS} ${RESOURCES})
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} ws2_32)
+    target_link_libraries(${PROJECT_NAME} ws2_32 Advapi32 PowrProf)
 endif()
 target_link_libraries(${PROJECT_NAME} UpdateDownloader XmlConfig)
 add_definitions(-DUNICODE -D_USE_MATH_DEFINES)

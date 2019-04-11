@@ -77,6 +77,15 @@ wstring s2ws(const string &s);
  * Klasa interfejsu graficznego. Klasa tworzy okno dialogowe oraz ikonê systemow¹
  */
 class Gui {
+public:
+    /* Lista wyliczeniowa stau okna */
+    enum window_state {
+        wsDefault,  /**< Bez zmiany stanu okna */
+        wsShow,     /**< Pokazanie okna        */
+        wsHide,     /**< Ukrycie okna          */
+        wsTimedHide /**< Ukrycie okna po 2s    */
+    };
+
 private:
     // Update
     UpdateDownloader downloader;
@@ -100,6 +109,7 @@ private:
     void showContextMenu(HWND hWnd) const;
     void initDialog(HWND hWnd) const;
     void saveSettings() const;
+    void windowState(window_state state) const;
 
     // Move inertion
     bool moveLoopIsRunning;
@@ -117,13 +127,6 @@ private:
     void sendCurrentVolume();
 
 public:
-    /* Lista wyliczeniowa stau okna */
-    enum window_state {
-        wsDefault,  /**< Bez zmiany stanu okna */
-        wsShow,     /**< Pokazanie okna        */
-        wsHide,     /**< Ukrycie okna          */
-        wsTimedHide /**< Ukrycie okna po 2s    */
-    };
     // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
     Gui();
     // Destruktor - usuwa ikonê systemow¹
