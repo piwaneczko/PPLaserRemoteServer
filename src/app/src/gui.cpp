@@ -9,14 +9,17 @@
 #include <assert.h>
 #include <math.h>
 #include <ctime>
+#include <filesystem>
 #include <future>
 #include "BluetoothServer.hpp"
 #include "TCPServer.hpp"
 #include "XmlConfig.hpp"
 #include "hibernatehandler.hpp"
 #include "resource.h"
+#include "shlobj.h"
 
 using namespace std;
+namespace fs = experimental::filesystem;
 
 #define SWM_TRAYMSG WM_APP  /**< The message ID sent to our window */
 #define SWM_SHOW WM_APP + 1 /**< Show the window                   */
@@ -51,12 +54,6 @@ enum msg_key_type_t {
 
 #define CRC_INIT 0xFFFFu
 #define CRC_VALID 0xF0B8u
-
-XmlConfigValue<bool, XmlConfigReadWriteFlag> showNotification("ShowNotification", false);
-XmlConfigValue<bool, XmlConfigReadWriteFlag> soundNotification("SoundNotification", false);
-XmlConfigValue<bool> tempDirectory("UpdateTemporaryDirectory", true);
-XmlConfigValue<bool, XmlConfigReadWriteFlag> useMoveThread("UseMoveThread", true);
-XmlConfigValue<uint32_t, XmlConfigReadWriteFlag> autoHide("Autohide time (milliseconds)", 4000);
 
 /**
  * Aktualizacja sumy kontrolnej
@@ -147,12 +144,12 @@ LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
                             gui.settingsHwnd = CreateDialog(gui.hInstance, MAKEINTRESOURCE(IDD_DIALOG_SETTINGS), gui.hWnd, DLGPROC(settingsProc));
                             if (gui.settingsHwnd) {
                                 SendDlgItemMessage(
-                                    gui.settingsHwnd, IDC_SHOW_NOTIFICATION, BM_SETCHECK, showNotification ? BST_CHECKED : BST_UNCHECKED, 0);
+                                    gui.settingsHwnd, IDC_SHOW_NOTIFICATION, BM_SETCHECK, gui.showNotification ? BST_CHECKED : BST_UNCHECKED, 0);
                                 SendDlgItemMessage(
-                                    gui.settingsHwnd, IDC_SOUND_NOTIFICATION, BM_SETCHECK, soundNotification ? BST_CHECKED : BST_UNCHECKED, 0);
+                                    gui.settingsHwnd, IDC_SOUND_NOTIFICATION, BM_SETCHECK, gui.soundNotification ? BST_CHECKED : BST_UNCHECKED, 0);
                                 SendDlgItemMessage(
-                                    gui.settingsHwnd, IDC_USE_MOVE_THREAD, BM_SETCHECK, useMoveThread ? BST_CHECKED : BST_UNCHECKED, 0);
-                                SetDlgItemInt(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, autoHide, FALSE);
+                                    gui.settingsHwnd, IDC_USE_MOVE_THREAD, BM_SETCHECK, gui.useMoveThread ? BST_CHECKED : BST_UNCHECKED, 0);
+                                SetDlgItemInt(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, gui.autoHide, FALSE);
 
                                 gui.initDialog(gui.settingsHwnd);
                                 ShowWindow(gui.settingsHwnd, SW_SHOW);
@@ -203,6 +200,22 @@ BOOL CALLBACK monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMoni
     return TRUE;
 }
 
+string changeDefaultConfigFilePath() {
+    string defaultConfigFilePath;
+    wchar_t appData[MAX_PATH];
+    if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appData))) {
+        cout << "Cannot find application data directory. Config file will be created in application directory" << endl;
+        defaultConfigFilePath = XmlConfig::GetXMLFilePath();
+    } else {
+        if (!exists(fs::path(appData + wstring(L"\\") + REMOTE_SERVER_TITLE))) {
+            create_directory(fs::path(appData + wstring(L"\\") + REMOTE_SERVER_TITLE));
+        }
+        defaultConfigFilePath = fs::path(appData + wstring(L"\\") + REMOTE_SERVER_TITLE + L"\\PPLaserRemoteServer.xml").string();
+        XmlConfig::SetXMLFilePath(defaultConfigFilePath);
+    }
+    return defaultConfigFilePath;
+}
+
 Gui::Gui()
     : downloader(L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.info",
                  L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.exe"),
@@ -210,7 +223,13 @@ Gui::Gui()
       hidden(),
       settingsHwnd(),
       audioVolume(this),
-      volume_(audioVolume.volume()) {
+      volume_(audioVolume.volume()),
+      settingsFilePath(changeDefaultConfigFilePath()),
+      showNotification("ShowNotification", false),
+      soundNotification("SoundNotification", false),
+      tempDirectory("UpdateTemporaryDirectory", true),
+      useMoveThread("UseMoveThread", true),
+      autoHide("Autohide time (milliseconds)", 4000) {
     hInstance = GetModuleHandle(nullptr);
     hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), nullptr, DLGPROC(dlgProc));
 
@@ -362,7 +381,7 @@ void Gui::initDialog(HWND hWnd) const {
     SetWindowLongPtr(hWnd, GWLP_USERDATA, LONG(this));
 }
 
-void Gui::saveSettings() const {
+void Gui::saveSettings() {
     // Save settings
     showNotification = SendDlgItemMessage(settingsHwnd, IDC_SHOW_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
     soundNotification = SendDlgItemMessage(settingsHwnd, IDC_SOUND_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;

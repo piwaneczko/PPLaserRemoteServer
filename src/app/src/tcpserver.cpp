@@ -15,8 +15,6 @@ using namespace std;
 
 #define RECV_BUFF_MAX_LEN 22 /**< Maksymalny rozmiar bufora odebranych danych */
 
-XmlConfigValue<uint16_t, XmlConfigReadWriteFlag> DefaultPort("TcpDefaultPort", 3389);
-
 bool checkPortTcp(uint16_t port) {
     sockaddr_in client;
     auto sock = INVALID_SOCKET;
@@ -47,7 +45,7 @@ bool checkPortTcp(uint16_t port) {
     return result;
 }
 
-TCPServer::TCPServer(Gui &gui) : Server(gui) {
+TCPServer::TCPServer(Gui &gui) : Server(gui), defaultPort("TcpDefaultPort", 3389) {
     serverType = stTCP;
 
     WSAData wsaData;
@@ -56,7 +54,7 @@ TCPServer::TCPServer(Gui &gui) : Server(gui) {
     }
     gui.setText(IDC_TCP_SERVER_STATUS, L"Initialization...");
 
-    uint16_t port = DefaultPort;
+    uint16_t port = defaultPort;
     try {
         while (!checkPortTcp(port)) port++;
     } catch (const exception &e) {
@@ -111,9 +109,9 @@ void TCPServer::mainLoop() {
     timeval timeout = {0, 1000};          // 1ms
     timeval listenTimeout = {0, 200000};  // 200Ms
 
-    if (DefaultPort() != port) {
+    if (defaultPort() != port) {
         if (MessageBox(nullptr,
-                       (L"TCP port " + to_wstring(DefaultPort())
+                       (L"TCP port " + to_wstring(defaultPort())
                         + L" is used by other program.\n"
                           L"Do you want to store currently TCP port "
                         + to_wstring(port) + L" in settings?")
@@ -121,7 +119,7 @@ void TCPServer::mainLoop() {
                        L"TCP port is used by other program",
                        MB_ICONQUESTION | MB_YESNO)
             == IDYES)
-            DefaultPort = port;
+            defaultPort = port;
     }
 
     gui.setText(IDC_TCP_CLIENT_IP, L"None", Gui::wsTimedHide);

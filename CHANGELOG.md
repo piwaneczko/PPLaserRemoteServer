@@ -1,5 +1,9 @@
 # CHANGELOG.md
 
+## [3.6.0.1] - 2019-04-27
+### Added
+- Moved settings to application data directory
+
 ## [3.5.0.1] - 2019-04-27
 ### Added
 - functionality of PC hibernation

@@ -23,6 +23,7 @@ include_directories (include)
 ######### Config Executable ###########
 
 add_library(${PROJECT_NAME} STATIC ${SOURCES} ${HEADERS})
+add_definitions(-DXML_CONFIG_NOT_DEFAULT_FILE_PATH)
 
 #######################################
 

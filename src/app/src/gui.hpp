@@ -9,6 +9,7 @@
 #define IG_GUI_H
 
 #include <Windows.h>
+#include <XmlConfig.hpp>
 #include <cstdint>
 #include <deque>
 #include <mutex>
@@ -108,7 +109,7 @@ private:
     friend BOOL CALLBACK monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
     void showContextMenu(HWND hWnd) const;
     void initDialog(HWND hWnd) const;
-    void saveSettings() const;
+    void saveSettings();
     void windowState(window_state state) const;
 
     // Move inertion
@@ -125,6 +126,13 @@ private:
     deque<vector<uint8_t>> dataToSend;
     mutex sendLocker;
     void sendCurrentVolume();
+
+    const string settingsFilePath;
+    XmlConfigValue<bool, XmlConfigReadWriteFlag> showNotification;
+    XmlConfigValue<bool, XmlConfigReadWriteFlag> soundNotification;
+    XmlConfigValue<bool> tempDirectory;
+    XmlConfigValue<bool, XmlConfigReadWriteFlag> useMoveThread;
+    XmlConfigValue<uint32_t, XmlConfigReadWriteFlag> autoHide;
 
 public:
     // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
