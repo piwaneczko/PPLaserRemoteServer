@@ -143,7 +143,7 @@ public:
     /**
      * Pêtla g³ówna przetwarzaj¹ca komunikaty systemowe. Koñczy siê po zamkniêciu aplikacji
      */
-    void mainLoop() const;
+    static void mainLoop();
     /**
      * Modyfikacja obrazu oraz tekstu informacyjnego ikony w pasku systemowym
      * \param[in] iconId     Identyfikator ikony. Wartoœci od 101 do 105
