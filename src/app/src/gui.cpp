@@ -123,10 +123,7 @@ LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
                 break;
             case WM_POWERBROADCAST:
-                if (clock() > 60 * CLOCKS_PER_SEC)
-                    *static_cast<int *>(nullptr) = 0;
-                else if (!gui.downloadThread.joinable())
-                    gui.downloadThread = thread(&Gui::downloadLoop, &gui);
+                gui.applicationRestart();
                 return 0;
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
@@ -220,8 +217,8 @@ Gui::Gui()
     : downloader(L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.info",
                  L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.exe"),
       zoomCount(1),
-      hidden(),
       settingsHwnd(),
+      hidden(),
       audioVolume(this),
       volume_(audioVolume.volume()),
       settingsFilePath(changeDefaultConfigFilePath()),
@@ -412,13 +409,17 @@ void Gui::windowState(window_state state) const {
     }
 }
 
-long sign(long diff) {
-    if (diff == 0)
-        return 0;
-    else if (diff > 0)
-        return 1;
-    else
-        return -1;
+void Gui::applicationRestart() {
+    if (clock() > 60 * CLOCKS_PER_SEC) {
+        Shell_NotifyIcon(NIM_DELETE, &niData);
+        *static_cast<int *>(nullptr) = 0;
+    } else if (!downloadThread.joinable()) {
+        downloadThread = thread(&Gui::downloadLoop, this);
+    }
+}
+
+inline long sign(const long &diff) {
+    return diff == 0 ? 0 : (diff > 0 ? 1 : -1);
 }
 void Gui::moveLoop() {
     moveLoopIsRunning = true;
@@ -453,7 +454,7 @@ void Gui::moveLoop() {
     }
 }
 
-void Gui::mainLoop() const {
+void Gui::mainLoop() {
     // Pêtla komunikatów
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {

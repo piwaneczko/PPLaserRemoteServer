@@ -111,6 +111,7 @@ private:
     void initDialog(HWND hWnd) const;
     void saveSettings();
     void windowState(window_state state) const;
+    void applicationRestart();
 
     // Move inertion
     bool moveLoopIsRunning;
