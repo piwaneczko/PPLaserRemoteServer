@@ -110,7 +110,7 @@ var
   iResultCode: Integer;
   sUnInstallString: string;
 begin
-  Result := False; { in case when no previous version is found }
+  Result := True; { in case when no previous version is found }
   if IsUpgrade() then  { Your App GUID/ID }
   begin
     sUnInstallString := GetUninstallString();
