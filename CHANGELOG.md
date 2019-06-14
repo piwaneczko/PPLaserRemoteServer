@@ -1,5 +1,9 @@
 # CHANGELOG.md
 
+## [3.8.0.1] - 2019-06-14
+### Changed
+- Fixed installation file to install also if previous version don't exists
+
 ## [3.7.0.1] - 2019-05-10
 ### Changed
 - Fixed removing tool bar icon after application is restarted

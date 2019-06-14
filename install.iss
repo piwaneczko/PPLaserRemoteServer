@@ -2,10 +2,11 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Laser Remote Server"        
-#define MyAppPublisher "Aircom AI"
+#define MyAppPublisher "Pawel Iwaneczko"
 #define MyAppURL "http://www.aircom.ag/" 
 #define MyAppExeName "PPLaserRemoteServer.exe"    
-#define MyAppVersion GetFileVersion('install\bin\PPLaserRemoteServer.exe')   
+#define MyAppVersion GetFileVersion('install\bin\PPLaserRemoteServer.exe') 
+#define VC_redist "https://aka.ms/vs/16/release/VC_redist.x86.exe" 
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application.
@@ -22,13 +23,13 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={pf}\{#MyAppPublisher}\{#MyAppName}
-DefaultGroupName={#MyAppPublisher}\{#MyAppName}
+DefaultDirName={pf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
 OutputBaseFilename=ppremotesetup
 OutputDir=install\bin
 WizardImageFile=src\app\resources\image.bmp
 WizardSmallImageFile=src\app\resources\imagesmall.bmp
-WizardImageStretch=False
+WizardImageStretch=True
 Compression=lzma
 SolidCompression=yes
 DisableDirPage=auto      
@@ -83,7 +84,7 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=
 [Code]
 procedure InitializeWizard();
 begin                                                                                          
-    idpAddFileSize('https://aka.ms/vs/15/release/VC_redist.x86.exe', ExpandConstant('{tmp}\vc_redist.x86.exe'), 14426128);
+    idpAddFileSize('{#VC_redist}', ExpandConstant('{tmp}\vc_redist.x86.exe'), 14426128);
     idpDownloadAfter(wpReady);
 end;
 /////////////////////////////////////////////////////////////////////
