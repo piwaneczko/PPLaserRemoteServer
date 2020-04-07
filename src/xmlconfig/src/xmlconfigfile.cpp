@@ -1,12 +1,17 @@
 #include <iostream>
 #include "XmlConfig.hpp"
-// Windows.h need to be included after XmlConfig.hpp
-#include <Windows.h>
 using namespace std;
 
+#if XML_CONFIG_NOT_DEFAULT_FILE_PATH
+#define USE_MODULE_PATH 0
+#else
+#define USE_MODULE_PATH 1
+#include <Windows.h>
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
+#endif
 
 XmlConfig::XmlConfig() {
+#if USE_MODULE_PATH
     char modulePath[MAX_PATH];
     GetModuleFileNameA((HINSTANCE)&__ImageBase, modulePath, MAX_PATH);
     filePath = modulePath;
@@ -14,6 +19,7 @@ XmlConfig::XmlConfig() {
     if (doc.load_file(filePath.c_str()).status != status_ok) {
         doc.reset();
     }
+#endif
 }
 
 XmlConfig &XmlConfig::GetInstance() {
@@ -27,17 +33,23 @@ XmlConfig::~XmlConfig() {
 
 void XmlConfig::UpdateXmlFile() {
     XmlConfig &xml = GetInstance();
-    if (xml.filePath.empty()) return;
+    if (xml.filePath.empty()) {
+#if USE_MODULE_PATH
+        xml.doc.reset();
+#endif
+        return;
+    }
     xml.doc.save_file(xml.filePath.c_str());
 }
 void XmlConfig::SetXMLFilePath(string filePath) {
     XmlConfig &xml = GetInstance();
     if (xml.filePath != filePath) {
-        xml.doc.save_file(xml.filePath.c_str());
         xml.filePath = filePath;
-        if (!filePath.empty() && xml.doc.load_file(filePath.c_str()).status != status_ok) {
-            xml.doc.reset();
-        }
+        xml_document doc;
+        if (doc.load_file(filePath.c_str()).status == status_ok)
+            xml.doc.load_file(filePath.c_str());
+        else
+            UpdateXmlFile();
     }
 }
 string XmlConfig::GetXMLFilePath() {
@@ -46,10 +58,11 @@ string XmlConfig::GetXMLFilePath() {
 }
 bool XmlConfig::FindElement(const XmlConfigElement &element, xml_attribute &attr) {
     XmlConfig &xml = XmlConfig::GetInstance();
-    if (xml.filePath.empty())
-        return false;
-    else if (xml.doc.load_file(xml.filePath.c_str()).status != status_ok) {
+
+    if (xml.doc.load_file(xml.filePath.c_str()).status != status_ok) {
+#if USE_MODULE_PATH
         xml.doc.reset();
+#endif
         return false;
     }
 

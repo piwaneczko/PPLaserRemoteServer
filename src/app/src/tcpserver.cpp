@@ -15,8 +15,6 @@ using namespace std;
 
 #define RECV_BUFF_MAX_LEN 22 /**< Maksymalny rozmiar bufora odebranych danych */
 
-XmlConfigValue<uint16_t, XmlConfigReadWriteFlag> DefaultPort("TcpDefaultPort", 3389);
-
 bool checkPortTcp(uint16_t port) {
     sockaddr_in client;
     auto sock = INVALID_SOCKET;
@@ -47,18 +45,56 @@ bool checkPortTcp(uint16_t port) {
     return result;
 }
 
-TCPServer::TCPServer(Gui &gui) : Server(gui) {
+TCPServer::TCPServer(Gui &gui) : Server(gui), defaultPort("TcpDefaultPort", 3389) {
     serverType = stTCP;
 
     WSAData wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData)) {
         gui.setText(IDC_TCP_SERVER_STATUS, L"WSAStartup error!", Gui::wsShow);
     }
+    gui.setText(IDC_TCP_SERVER_STATUS, L"Initialization...");
 
-    TCPServer::init();
+    uint16_t port = defaultPort;
+    try {
+        while (!checkPortTcp(port)) port++;
+    } catch (const exception &e) {
+        gui.setText(IDC_TCP_SERVER_STATUS, s2ws(e.what()).c_str(), Gui::wsShow);
+    }
+    this->port = port;
+
+    listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listenSocket == INVALID_SOCKET) {
+        gui.setText(IDC_TCP_SERVER_STATUS, L"socket Error!", Gui::wsShow);
+    } else {
+        sockaddr_in sockAddrTcpLocal = {0};
+        const auto sockAddrTcpLocalLen = sizeof(sockaddr_in);
+        sockAddrTcpLocal.sin_family = AF_INET;
+        sockAddrTcpLocal.sin_addr.s_addr = inet_addr("0.0.0.0");
+        sockAddrTcpLocal.sin_port = htons(port);
+
+        if (SOCKET_ERROR == ::bind(listenSocket, reinterpret_cast<sockaddr *>(&sockAddrTcpLocal), sockAddrTcpLocalLen)) {
+            gui.setText(IDC_TCP_SERVER_STATUS, L"bind Error!");
+            closesocket(listenSocket);
+            listenSocket = INVALID_SOCKET;
+        } else if (SOCKET_ERROR == listen(listenSocket, SOMAXCONN)) {
+            gui.setText(IDC_TCP_SERVER_STATUS, L"listen Error!", Gui::wsShow);
+            closesocket(listenSocket);
+            listenSocket = INVALID_SOCKET;
+        } else
+            listenThread = thread(&TCPServer::mainLoop, this);
+    }
 }
 TCPServer::~TCPServer() {
-    TCPServer::destroy();
+    mainLoopIsRunning = false;
+    if (listenSocket != INVALID_SOCKET) {
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
+    }
+    if (clientSocket != INVALID_SOCKET) {
+        closesocket(clientSocket);
+        clientSocket = INVALID_SOCKET;
+    }
+    if (listenThread.joinable()) listenThread.join();
 }
 
 void TCPServer::mainLoop() {
@@ -73,9 +109,9 @@ void TCPServer::mainLoop() {
     timeval timeout = {0, 1000};          // 1ms
     timeval listenTimeout = {0, 200000};  // 200Ms
 
-    if (DefaultPort() != port) {
+    if (defaultPort() != port) {
         if (MessageBox(nullptr,
-                       (L"TCP port " + to_wstring(DefaultPort())
+                       (L"TCP port " + to_wstring(defaultPort())
                         + L" is used by other program.\n"
                           L"Do you want to store currently TCP port "
                         + to_wstring(port) + L" in settings?")
@@ -83,7 +119,7 @@ void TCPServer::mainLoop() {
                        L"TCP port is used by other program",
                        MB_ICONQUESTION | MB_YESNO)
             == IDYES)
-            DefaultPort = port;
+            defaultPort = port;
     }
 
     gui.setText(IDC_TCP_CLIENT_IP, L"None", Gui::wsTimedHide);
@@ -173,53 +209,6 @@ void TCPServer::mainLoop() {
         listenSocket = INVALID_SOCKET;
     }
     mainLoopIsRunning = false;
-}
-
-void TCPServer::init() {
-    gui.setText(IDC_TCP_SERVER_STATUS, L"Initialization...");
-
-    uint16_t port = DefaultPort;
-    try {
-        while (!checkPortTcp(port)) port++;
-    } catch (const exception &e) {
-        gui.setText(IDC_TCP_SERVER_STATUS, s2ws(e.what()).c_str(), Gui::wsShow);
-    }
-    this->port = port;
-
-    listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listenSocket == INVALID_SOCKET) {
-        gui.setText(IDC_TCP_SERVER_STATUS, L"socket Error!", Gui::wsShow);
-    } else {
-        sockaddr_in sockAddrTcpLocal = {0};
-        const auto sockAddrTcpLocalLen = sizeof(sockaddr_in);
-        sockAddrTcpLocal.sin_family = AF_INET;
-        sockAddrTcpLocal.sin_addr.s_addr = inet_addr("0.0.0.0");
-        sockAddrTcpLocal.sin_port = htons(port);
-
-        if (SOCKET_ERROR == ::bind(listenSocket, reinterpret_cast<sockaddr *>(&sockAddrTcpLocal), sockAddrTcpLocalLen)) {
-            gui.setText(IDC_TCP_SERVER_STATUS, L"bind Error!");
-            closesocket(listenSocket);
-            listenSocket = INVALID_SOCKET;
-        } else if (SOCKET_ERROR == listen(listenSocket, SOMAXCONN)) {
-            gui.setText(IDC_TCP_SERVER_STATUS, L"listen Error!", Gui::wsShow);
-            closesocket(listenSocket);
-            listenSocket = INVALID_SOCKET;
-        } else
-            listenThread = thread(&TCPServer::mainLoop, this);
-    }
-}
-void TCPServer::destroy() {
-    mainLoopIsRunning = false;
-    if (listenSocket != INVALID_SOCKET) {
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
-    }
-    if (clientSocket != INVALID_SOCKET) {
-        closesocket(clientSocket);
-        clientSocket = INVALID_SOCKET;
-    }
-    this_thread::sleep_for(100ms);
-    if (listenThread.joinable()) listenThread.join();
 }
 
 void TCPServer::setServerIPs(uint16_t port) {

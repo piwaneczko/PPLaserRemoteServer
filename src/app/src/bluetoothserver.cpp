@@ -21,11 +21,78 @@ BluetoothServer::BluetoothServer(Gui &gui) : Server(gui) {
     if (WSAStartup(MAKEWORD(2, 2), &WSAData)) {
         gui.setText(IDC_BTH_SERVER_STATUS, L"WSAStartup error!", Gui::wsShow);
     }
+    wchar_t szThisComputerName[MAX_COMPUTERNAME_LENGTH + 1];
+    DWORD dwLenComputerName = MAX_COMPUTERNAME_LENGTH + 1;
 
-    BluetoothServer::init();
+    wstring computerName;
+    if (!GetComputerName(szThisComputerName, &dwLenComputerName)) {
+        gui.setText(IDC_BTH_SERVER_STATUS, L"GetComputerName Error!", Gui::wsShow);
+    } else {
+        computerName = wstring(szThisComputerName, dwLenComputerName);
+        gui.setText(IDC_BTH_SERVER_NAME, computerName);
+    }
+
+    listenSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
+    if (listenSocket == INVALID_SOCKET) {
+        gui.setText(IDC_BTH_SERVER_STATUS, L"socket Error!", Gui::wsShow);
+    }
+
+    SOCKADDR_BTH sockAddrBthLocal = {0};
+    int sockAddrBthLocalLen = sizeof(SOCKADDR_BTH);
+    sockAddrBthLocal.addressFamily = AF_BTH;
+    sockAddrBthLocal.port = BT_PORT_ANY;
+
+    if (SOCKET_ERROR == ::bind(listenSocket, (struct sockaddr *)&sockAddrBthLocal, sockAddrBthLocalLen)) {
+        gui.setText(IDC_BTH_SERVER_STATUS, L"No Bluetooth Device!", Gui::wsShow);
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
+    } else if (SOCKET_ERROR == getsockname(listenSocket, reinterpret_cast<sockaddr *>(&sockAddrBthLocal), &sockAddrBthLocalLen)) {
+        gui.setText(IDC_BTH_SERVER_STATUS, L"getsockname Error!", Gui::wsShow);
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
+    } else {
+        WSAQUERYSET wsaQuerySet = {0};
+        CSADDR_INFO clientSocketAddrInfo = {nullptr};
+        clientSocketAddrInfo.LocalAddr.iSockaddrLength = sizeof(SOCKADDR_BTH);
+        clientSocketAddrInfo.LocalAddr.lpSockaddr = LPSOCKADDR(&sockAddrBthLocal);
+        clientSocketAddrInfo.RemoteAddr.iSockaddrLength = sizeof(SOCKADDR_BTH);
+        clientSocketAddrInfo.RemoteAddr.lpSockaddr = LPSOCKADDR(&sockAddrBthLocal);
+        clientSocketAddrInfo.iSocketType = SOCK_STREAM;
+        clientSocketAddrInfo.iProtocol = BTHPROTO_RFCOMM;
+
+        ZeroMemory(&wsaQuerySet, sizeof(WSAQUERYSET));
+        wsaQuerySet.dwSize = sizeof(WSAQUERYSET);
+        wsaQuerySet.lpServiceClassId = LPGUID(&guidServiceClass);
+
+        wsaQuerySet.lpszServiceInstanceName = (LPWSTR)(computerName + L" " + REMOTE_SERVER_INSTANCE_STRING).c_str();
+        wsaQuerySet.lpszComment = L"PP Laser Remote Server";
+        wsaQuerySet.dwNameSpace = NS_BTH;
+        wsaQuerySet.dwNumberOfCsAddrs = 1;                // Must be 1.
+        wsaQuerySet.lpcsaBuffer = &clientSocketAddrInfo;  // Req'd.
+
+        if (SOCKET_ERROR == WSASetService(&wsaQuerySet, RNRSERVICE_REGISTER, 0)) {
+            gui.setText(IDC_BTH_SERVER_STATUS, L"WSASetService Error!", Gui::wsShow);
+            closesocket(listenSocket);
+            listenSocket = INVALID_SOCKET;
+        } else if (SOCKET_ERROR == listen(listenSocket, SOMAXCONN)) {
+            gui.setText(IDC_BTH_SERVER_STATUS, L"listen Error!", Gui::wsShow);
+            closesocket(listenSocket);
+            listenSocket = INVALID_SOCKET;
+        } else
+            listenThread = thread(&BluetoothServer::mainLoop, this);
+    }
 }
 BluetoothServer::~BluetoothServer() {
-    BluetoothServer::destroy();
+    mainLoopIsRunning = false;
+    if (listenSocket != INVALID_SOCKET) {
+        closesocket(listenSocket);
+        listenSocket = INVALID_SOCKET;
+    }
+    if (clientSocket != INVALID_SOCKET) {
+        closesocket(clientSocket);
+        clientSocket = INVALID_SOCKET;
+    }
+    if (listenThread.joinable()) listenThread.join();
 }
 
 wstring bthAddrToName(const SOCKADDR_BTH &remoteBthAddr) {
@@ -167,80 +234,4 @@ void BluetoothServer::mainLoop() {
         listenSocket = INVALID_SOCKET;
     }
     mainLoopIsRunning = false;
-}
-
-void BluetoothServer::init() {
-    wchar_t szThisComputerName[MAX_COMPUTERNAME_LENGTH + 1];
-    DWORD dwLenComputerName = MAX_COMPUTERNAME_LENGTH + 1;
-
-    wstring computerName;
-    if (!GetComputerName(szThisComputerName, &dwLenComputerName)) {
-        gui.setText(IDC_BTH_SERVER_STATUS, L"GetComputerName Error!", Gui::wsShow);
-    } else {
-        computerName = wstring(szThisComputerName, dwLenComputerName);
-        gui.setText(IDC_BTH_SERVER_NAME, computerName);
-    }
-
-    listenSocket = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
-    if (listenSocket == INVALID_SOCKET) {
-        gui.setText(IDC_BTH_SERVER_STATUS, L"socket Error!", Gui::wsShow);
-    }
-
-    SOCKADDR_BTH sockAddrBthLocal = {0};
-    int sockAddrBthLocalLen = sizeof(SOCKADDR_BTH);
-    sockAddrBthLocal.addressFamily = AF_BTH;
-    sockAddrBthLocal.port = BT_PORT_ANY;
-
-    if (SOCKET_ERROR == ::bind(listenSocket, (struct sockaddr *)&sockAddrBthLocal, sockAddrBthLocalLen)) {
-        gui.setText(IDC_BTH_SERVER_STATUS, L"No Bluetooth Device!", Gui::wsShow);
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
-    } else if (SOCKET_ERROR == getsockname(listenSocket, reinterpret_cast<sockaddr *>(&sockAddrBthLocal), &sockAddrBthLocalLen)) {
-        gui.setText(IDC_BTH_SERVER_STATUS, L"getsockname Error!", Gui::wsShow);
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
-    } else {
-        WSAQUERYSET wsaQuerySet = {0};
-        CSADDR_INFO clientSocketAddrInfo = {nullptr};
-        clientSocketAddrInfo.LocalAddr.iSockaddrLength = sizeof(SOCKADDR_BTH);
-        clientSocketAddrInfo.LocalAddr.lpSockaddr = LPSOCKADDR(&sockAddrBthLocal);
-        clientSocketAddrInfo.RemoteAddr.iSockaddrLength = sizeof(SOCKADDR_BTH);
-        clientSocketAddrInfo.RemoteAddr.lpSockaddr = LPSOCKADDR(&sockAddrBthLocal);
-        clientSocketAddrInfo.iSocketType = SOCK_STREAM;
-        clientSocketAddrInfo.iProtocol = BTHPROTO_RFCOMM;
-
-        ZeroMemory(&wsaQuerySet, sizeof(WSAQUERYSET));
-        wsaQuerySet.dwSize = sizeof(WSAQUERYSET);
-        wsaQuerySet.lpServiceClassId = LPGUID(&guidServiceClass);
-
-        wsaQuerySet.lpszServiceInstanceName = (LPWSTR)(computerName + L" " + REMOTE_SERVER_INSTANCE_STRING).c_str();
-        wsaQuerySet.lpszComment = L"PP Laser Remote Server";
-        wsaQuerySet.dwNameSpace = NS_BTH;
-        wsaQuerySet.dwNumberOfCsAddrs = 1;                // Must be 1.
-        wsaQuerySet.lpcsaBuffer = &clientSocketAddrInfo;  // Req'd.
-
-        if (SOCKET_ERROR == WSASetService(&wsaQuerySet, RNRSERVICE_REGISTER, 0)) {
-            gui.setText(IDC_BTH_SERVER_STATUS, L"WSASetService Error!", Gui::wsShow);
-            closesocket(listenSocket);
-            listenSocket = INVALID_SOCKET;
-        } else if (SOCKET_ERROR == listen(listenSocket, SOMAXCONN)) {
-            gui.setText(IDC_BTH_SERVER_STATUS, L"listen Error!", Gui::wsShow);
-            closesocket(listenSocket);
-            listenSocket = INVALID_SOCKET;
-        } else
-            listenThread = thread(&BluetoothServer::mainLoop, this);
-    }
-}
-
-void BluetoothServer::destroy() {
-    mainLoopIsRunning = false;
-    if (listenSocket != INVALID_SOCKET) {
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCKET;
-    }
-    if (clientSocket != INVALID_SOCKET) {
-        closesocket(clientSocket);
-        clientSocket = INVALID_SOCKET;
-    }
-    if (listenThread.joinable()) listenThread.join();
 }

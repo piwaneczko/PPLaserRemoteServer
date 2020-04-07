@@ -4,7 +4,7 @@
 #include <iostream>
 #include "FileInfo.h"
 using namespace std;
-namespace fs = std::experimental::filesystem;
+namespace fs = filesystem;
 
 #define SAVE_INFO 1
 

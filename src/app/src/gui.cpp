@@ -8,13 +8,18 @@
 #include <ShObjIdl.h>
 #include <assert.h>
 #include <math.h>
+#include <ctime>
+#include <filesystem>
 #include <future>
 #include "BluetoothServer.hpp"
 #include "TCPServer.hpp"
 #include "XmlConfig.hpp"
+#include "hibernatehandler.hpp"
 #include "resource.h"
+#include "shlobj.h"
 
 using namespace std;
+namespace fs = filesystem;
 
 #define SWM_TRAYMSG WM_APP  /**< The message ID sent to our window */
 #define SWM_SHOW WM_APP + 1 /**< Show the window                   */
@@ -37,17 +42,18 @@ enum msg_key_type_t {
     msg_key_type_volume_up = 10,
     msg_key_type_zoom_in = 11,
     msg_key_type_zoom_out = 12,
-    msg_key_type_pause = 13
+    msg_key_type_pause = 13,
+    msg_key_type_mute = 14,
+    msg_key_type_media_select = 15,
+    msg_key_type_media_next = 16,
+    msg_key_type_media_prev = 17,
+    msg_key_type_media_stop = 18,
+    msg_key_type_media_play = 19,
+    msg_key_type_hibernate = 20
 };
 
 #define CRC_INIT 0xFFFFu
 #define CRC_VALID 0xF0B8u
-
-XmlConfigValue<bool> showNotification("ShowNotification", false);
-XmlConfigValue<bool> soundNotification("SoundNotification", false);
-XmlConfigValue<bool> tempDirectory("UpdateTemporaryDirectory", true);
-XmlConfigValue<bool> useMoveThread("UseMoveThread", true);
-XmlConfigValue<uint32_t> autoHide("Autohide time (milliseconds)", 4000);
 
 /**
  * Aktualizacja sumy kontrolnej
@@ -65,7 +71,29 @@ static uint16_t CrcUpdate(uint16_t crc, uint8_t byte) {
     return crc;
 }
 
-LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK Gui::settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
+        auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+        switch (msg) {
+            case WM_COMMAND:
+                switch (LOWORD(wParam)) {
+                    case IDOK:
+                        gui.saveSettings();
+                        return 0;
+                    case IDCANCEL:
+                        EndDialog(hWnd, wParam);
+                        return 0;
+                    default:
+                        break;
+                }
+            default:
+                break;
+        }
+    }
+    return 0;
+}
+
+LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (GetWindowLongPtr(hWnd, GWLP_USERDATA) != NULL) {
         auto &gui = *reinterpret_cast<Gui *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
         switch (msg) {
@@ -75,8 +103,8 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         if (IsWindowVisible(hWnd)) {
                             ShowWindow(hWnd, SW_HIDE);
                         } else {
+                            EndDialog(gui.settingsHwnd, FALSE);
                             ShowWindow(hWnd, SW_RESTORE);
-                            UpdateWindow(hWnd);
                         }
                         return 1;
                     case WM_RBUTTONDOWN:
@@ -85,7 +113,6 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     default:
                         break;
                 }
-                break;
             case WM_SYSCOMMAND:
                 if ((wParam & 0xFFF0) == SC_MINIMIZE) {
                     ShowWindow(hWnd, SW_HIDE);
@@ -96,24 +123,36 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
                 break;
             case WM_POWERBROADCAST:
-                if (gui.connectedServer) gui.connectedServer->reset();
-                if (!gui.downloadThread.joinable()) gui.downloadThread = thread(&Gui::downloadLoop, &gui);
-                return 1;
+                gui.applicationRestart();
+                return 0;
             case WM_COMMAND:
                 switch (LOWORD(wParam)) {
                     case SWM_SHOW:
+                        EndDialog(gui.settingsHwnd, FALSE);
                         ShowWindow(hWnd, SW_RESTORE);
                         break;
                     case SWM_HIDE:
                     case IDOK:
                         ShowWindow(hWnd, SW_HIDE);
                         break;
-                    case SWM_SETT: {
-                        wchar_t appFileName[MAX_PATH];
-                        GetModuleFileName(nullptr, appFileName, MAX_PATH);
-                        const auto xmlFilePath = wstring(appFileName) + L".xml";
-                        ShellExecute(nullptr, L"open", xmlFilePath.c_str(), nullptr, nullptr, SW_SHOW);
-                    } break;
+                    case SWM_SETT:
+                        if (!IsWindowVisible(gui.settingsHwnd)) {
+                            EndDialog(gui.hWnd, TRUE);
+                            gui.settingsHwnd = CreateDialog(gui.hInstance, MAKEINTRESOURCE(IDD_DIALOG_SETTINGS), gui.hWnd, DLGPROC(settingsProc));
+                            if (gui.settingsHwnd) {
+                                SendDlgItemMessage(
+                                    gui.settingsHwnd, IDC_SHOW_NOTIFICATION, BM_SETCHECK, gui.showNotification ? BST_CHECKED : BST_UNCHECKED, 0);
+                                SendDlgItemMessage(
+                                    gui.settingsHwnd, IDC_SOUND_NOTIFICATION, BM_SETCHECK, gui.soundNotification ? BST_CHECKED : BST_UNCHECKED, 0);
+                                SendDlgItemMessage(
+                                    gui.settingsHwnd, IDC_USE_MOVE_THREAD, BM_SETCHECK, gui.useMoveThread ? BST_CHECKED : BST_UNCHECKED, 0);
+                                SetDlgItemInt(gui.settingsHwnd, IDC_AUTO_HIDE_TIME, gui.autoHide, FALSE);
+
+                                gui.initDialog(gui.settingsHwnd);
+                                ShowWindow(gui.settingsHwnd, SW_SHOW);
+                            }
+                        }
+                        break;
                     case SWM_EXIT:
                         DestroyWindow(hWnd);
                         break;
@@ -129,25 +168,24 @@ LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 PostQuitMessage(0);
                 break;
             default:
-                return DefWindowProc(hWnd, msg, wParam, lParam);
+                break;
         }
     } else {
         // nie ustalono klasy GUI
         switch (msg) {
             case WM_CLOSE:
                 DestroyWindow(hWnd);
-                return 0;
+                break;
             case WM_DESTROY:
                 PostQuitMessage(0);
-                return 0;
+                break;
             default:
-                return DefWindowProc(hWnd, msg, wParam, lParam);
+                break;
         }
     }
-
     return 0;
 }
-BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
+BOOL CALLBACK monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
     // uzyskanie wskaünika na glemm
     auto gui = reinterpret_cast<Gui *>(dwData);
 
@@ -159,23 +197,44 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMoni
     return TRUE;
 }
 
+string changeDefaultConfigFilePath() {
+    string defaultConfigFilePath;
+    wchar_t appData[MAX_PATH];
+    if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appData))) {
+        cout << "Cannot find application data directory. Config file will be created in application directory" << endl;
+        defaultConfigFilePath = XmlConfig::GetXMLFilePath();
+    } else {
+        if (!exists(fs::path(appData + wstring(L"\\") + REMOTE_SERVER_TITLE))) {
+            create_directory(fs::path(appData + wstring(L"\\") + REMOTE_SERVER_TITLE));
+        }
+        defaultConfigFilePath = fs::path(appData + wstring(L"\\") + REMOTE_SERVER_TITLE + L"\\PPLaserRemoteServer.xml").string();
+        XmlConfig::SetXMLFilePath(defaultConfigFilePath);
+    }
+    return defaultConfigFilePath;
+}
+
 Gui::Gui()
     : downloader(L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.info",
                  L"https://github.com/piwaneczko/PPLaserRemoteServer/releases/download/update/ppremotesetup.exe"),
       zoomCount(1),
+      settingsHwnd(),
       hidden(),
       audioVolume(this),
-      volume_(audioVolume.volume()) {
+      volume_(audioVolume.volume()),
+      settingsFilePath(changeDefaultConfigFilePath()),
+      showNotification("ShowNotification", false),
+      soundNotification("SoundNotification", false),
+      tempDirectory("UpdateTemporaryDirectory", true),
+      useMoveThread("UseMoveThread", true),
+      autoHide("Autohide time (milliseconds)", 4000) {
     hInstance = GetModuleHandle(nullptr);
-    hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), nullptr, DLGPROC(DlgProc));
-
-    auto hIcon = HICON(LoadImage(hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE));
-    SendMessage(hWnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
-    SendMessage(hWnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
+    hWnd = CreateDialog(hInstance, MAKEINTRESOURCE(IDD_DIALOG), nullptr, DLGPROC(dlgProc));
 
     if (hWnd == nullptr) exit(1);
 
-    SetWindowLongPtr(hWnd, GWLP_USERDATA, LONG(this));
+    initDialog(hWnd);
+    RegisterApplicationRestart(L"", NULL);
+    // TODO - icon to update
 
     // Declare NOTIFYICONDATA details.
     // Error handling is omitted here for brevity. Do not omit it in your code.
@@ -202,15 +261,13 @@ Gui::Gui()
     UpdateWindow(hWnd);
 
     // utworzenie okien na kaødym monitorze
-    EnumDisplayMonitors(nullptr, nullptr, MonitorEnumProc, LPARAM(this));
+    EnumDisplayMonitors(nullptr, nullptr, monitorEnumProc, LPARAM(this));
     assert(screens.size() > 0);
     lastEventReceived = 0;
-    downloadThread = thread(&Gui::downloadLoop, this);
 
     SetThreadExecutionState(ES_SYSTEM_REQUIRED);
 
-    bluetoothServer = make_unique<BluetoothServer>(*this);
-    tcpServer = make_unique<TCPServer>(*this);
+    downloadThread = thread(&Gui::downloadLoop, this);
     moveThread = thread(&Gui::moveLoop, this);
 }
 Gui::~Gui() {
@@ -253,6 +310,11 @@ void onUpdateProgress(float value, void *user) {
     }
 }
 void Gui::downloadLoop() {
+    tcpServer.reset();
+    bluetoothServer.reset();
+    tcpServer = make_unique<TCPServer>(*this);
+    bluetoothServer = make_unique<BluetoothServer>(*this);
+
     auto version = downloader.CheckVersion(UD_CHECK_BASE);
     if (!version.empty()) {
         KillTimer(hWnd, ID_TIMER);
@@ -284,10 +346,11 @@ void Gui::downloadLoop() {
             }
         }
     }
+    windowState(autoHide > 0u ? wsTimedHide : wsHide);
     downloadThread.detach();
 }
 
-void Gui::showContextMenu(const HWND hWnd) {
+void Gui::showContextMenu(const HWND hWnd) const {
     POINT pt;
     GetCursorPos(&pt);
     const auto hMenu = CreatePopupMenu();
@@ -296,7 +359,7 @@ void Gui::showContextMenu(const HWND hWnd) {
             InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_HIDE, L"Hide");
         else
             InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SHOW, L"Show");
-        InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SETT, L"Settings");
+        if (!IsWindowVisible(settingsHwnd)) InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_SETT, L"Settings");
         InsertMenu(hMenu, -1, MF_BYPOSITION, SWM_EXIT, L"Exit");
 
         // note:	must set window to the foreground or the
@@ -308,13 +371,56 @@ void Gui::showContextMenu(const HWND hWnd) {
     }
 }
 
-long sign(long diff) {
-    if (diff == 0)
-        return 0;
-    else if (diff > 0)
-        return 1;
-    else
-        return -1;
+void Gui::initDialog(HWND hWnd) const {
+    auto hIcon = HICON(LoadImage(hInstance, MAKEINTRESOURCE(IDI_LASER_ICON), IMAGE_ICON, 0, 0, LR_SHARED | LR_DEFAULTSIZE));
+    SendMessage(hWnd, WM_SETICON, ICON_SMALL, LPARAM(hIcon));
+    SendMessage(hWnd, WM_SETICON, ICON_BIG, LPARAM(hIcon));
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, LONG(this));
+}
+
+void Gui::saveSettings() {
+    // Save settings
+    showNotification = SendDlgItemMessage(settingsHwnd, IDC_SHOW_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    soundNotification = SendDlgItemMessage(settingsHwnd, IDC_SOUND_NOTIFICATION, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    useMoveThread = SendDlgItemMessage(settingsHwnd, IDC_USE_MOVE_THREAD, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    BOOL success;
+    const auto time = GetDlgItemInt(settingsHwnd, IDC_AUTO_HIDE_TIME, &success, FALSE);
+    if (success) {
+        autoHide = time;
+        EndDialog(settingsHwnd, TRUE);
+    } else {
+        SetDlgItemInt(settingsHwnd, IDC_AUTO_HIDE_TIME, autoHide, FALSE);
+    }
+}
+
+void Gui::windowState(window_state state) const {
+    switch (state) {
+        case wsShow:
+            ShowWindow(hWnd, SW_SHOWDEFAULT);
+            break;
+        case wsHide:
+            ShowWindow(hWnd, SW_HIDE);
+            break;
+        case wsTimedHide:
+            if (autoHide > 0u) SetTimer(hWnd, ID_TIMER, autoHide, nullptr);
+            break;
+        default:
+            break;
+    }
+}
+
+void Gui::applicationRestart() {
+    /*if (clock() > 60 * CLOCKS_PER_SEC) {
+        Shell_NotifyIcon(NIM_DELETE, &niData);
+        *static_cast<int *>(nullptr) = 0;
+    } else*/
+    if (!downloadThread.joinable()) {
+        downloadThread = thread(&Gui::downloadLoop, this);
+    }
+}
+
+inline long sign(const long &diff) {
+    return diff == 0 ? 0 : (diff > 0 ? 1 : -1);
 }
 void Gui::moveLoop() {
     moveLoopIsRunning = true;
@@ -330,7 +436,15 @@ void Gui::moveLoop() {
             }
         }
         if (sp.x != pv.x || sp.y != pv.y) {
-            const POINT e = {sign(sp.x - pv.x), sign(sp.y - pv.y)};
+            POINT e = {sign(sp.x - pv.x), sign(sp.y - pv.y)};
+            const auto dx = sp.x - pv.x;
+            const auto dy = sp.y - pv.y;
+            if (dx > 0 && dy > 0) {
+                if (dx > dy)
+                    e.x *= dx / dy;
+                else
+                    e.y *= dy / dx;
+            }
             pv = {long(pv.x + e.x), long(pv.y + e.y)};
             mouseEvent(MOUSEEVENTF_MOVE, int(e.x), int(e.y));
         } else if (moveDeque.empty()) {
@@ -372,24 +486,9 @@ bool Gui::hideTrayIcon() {
     hidden = (Shell_NotifyIcon(NIM_DELETE, &niData) == TRUE);
     return hidden;
 }
-bool Gui::setText(int textBoxId, const wstring &text, window_state windowState) const {
-    const auto textBox = GetDlgItem(hWnd, textBoxId);
-    auto result = TRUE;
-    switch (windowState) {
-        case Gui::wsShow:
-            ShowWindow(hWnd, SW_SHOWDEFAULT);
-            break;
-        case Gui::wsHide:
-            ShowWindow(hWnd, SW_HIDE);
-            break;
-        case Gui::wsTimedHide:
-            if (autoHide > 0u) result &= SetTimer(hWnd, ID_TIMER, autoHide, nullptr);
-            break;
-        default:
-            break;
-    }
-    result &= SendMessage(textBox, WM_SETTEXT, 0, LPARAM(text.c_str()));
-    return (result == TRUE);
+bool Gui::setText(int textBoxId, const wstring &text, window_state state) const {
+    windowState(state);
+    return SendMessage(GetDlgItem(hWnd, textBoxId), WM_SETTEXT, 0, LPARAM(text.c_str())) != 0;
 }
 
 BOOL CALLBACK KillScreenSaverFunc(HWND hwnd, LPARAM lParam) {
@@ -496,8 +595,9 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
             const auto eventReceived = clock();
             // przetwarzanie danych tylko z pierwszego serwera
             switch (data[0]) {
-                case msg_type_button:
-                    switch (data[1]) {
+                case msg_type_button: {
+                    const auto type = msg_key_type_t(data[1]);
+                    switch (type) {
                         case msg_key_type_esc:
                             keyboardEvent(VK_ESCAPE);
                             break;
@@ -574,10 +674,31 @@ void Gui::procRecvData(const Server *server, uint8_t *data, uint16_t dataLen) {
                         case msg_key_type_pause:
                             keybd_event(BYTE(VkKeyScan('B')), 0xB0, 0, 0);
                             break;
+                        case msg_key_type_mute:
+                            keyboardEvent(VK_VOLUME_MUTE);
+                            break;
+                        case msg_key_type_media_select:
+                            keyboardEvent(VK_LAUNCH_MEDIA_SELECT);
+                            break;
+                        case msg_key_type_media_next:
+                            keyboardEvent(VK_MEDIA_NEXT_TRACK);
+                            break;
+                        case msg_key_type_media_prev:
+                            keyboardEvent(VK_MEDIA_PREV_TRACK);
+                            break;
+                        case msg_key_type_media_stop:
+                            keyboardEvent(VK_MEDIA_STOP);
+                            break;
+                        case msg_key_type_media_play:
+                            keyboardEvent(VK_MEDIA_PLAY_PAUSE);
+                            break;
+                        case msg_key_type_hibernate:
+                            HibernateHandler::hibernate();
+                            break;
                         default:
                             break;
                     }
-                    break;
+                } break;
                 case msg_type_laser:
                     if (data[1]) {
                         setTrayIcon(IDI_LASER_ICON_ON, L"");
@@ -755,16 +876,6 @@ void Server::disconnect() {
         shutdown(clientSocket, SD_BOTH);
         clientSocket = INVALID_SOCKET;
     }
-}
-
-void Server::resetLoop() {
-    destroy();
-    init();
-    resetThread.detach();
-}
-
-void Server::reset() {
-    resetThread = thread(&Server::resetLoop, this);
 }
 
 wstring s2ws(const string &s) {

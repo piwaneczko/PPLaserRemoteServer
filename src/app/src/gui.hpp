@@ -9,6 +9,7 @@
 #define IG_GUI_H
 
 #include <Windows.h>
+#include <XmlConfig.hpp>
 #include <cstdint>
 #include <deque>
 #include <mutex>
@@ -44,13 +45,10 @@ enum server_type_en { stUnspecified, stBluetooth, stTCP };
 class Server {
 protected:
     Gui &gui;
-    thread listenThread, resetThread;
+    thread listenThread;
     uint32_t listenSocket = INVALID_SOCKET, clientSocket = INVALID_SOCKET;
     bool mainLoopIsRunning = false;
     virtual void mainLoop() = 0;
-    virtual void init() = 0;
-    virtual void destroy() = 0;
-    void resetLoop();
 
     server_type_en serverType = stUnspecified;
     static uint16_t getDataLen(msg_type_t type);
@@ -67,10 +65,6 @@ public:
      * Disconnecting client with shutdown (R&W)
      */
     void disconnect();
-    /**
-     * Resets the mainLoop and listenSocket
-     */
-    void reset();
 };
 
 /* Struktura prostok¹tu monitora */
@@ -84,6 +78,15 @@ wstring s2ws(const string &s);
  * Klasa interfejsu graficznego. Klasa tworzy okno dialogowe oraz ikonê systemow¹
  */
 class Gui {
+public:
+    /* Lista wyliczeniowa stau okna */
+    enum window_state {
+        wsDefault,  /**< Bez zmiany stanu okna */
+        wsShow,     /**< Pokazanie okna        */
+        wsHide,     /**< Ukrycie okna          */
+        wsTimedHide /**< Ukrycie okna po 2s    */
+    };
+
 private:
     // Update
     UpdateDownloader downloader;
@@ -97,13 +100,18 @@ private:
     unique_ptr<Server> tcpServer;
     deque<ScrrenRect> screens;
     mutex serverMutex;
-    HWND hWnd;
+    HWND hWnd, settingsHwnd;
     bool hidden;
     HINSTANCE hInstance;
     NOTIFYICONDATA niData;
-    friend LRESULT CALLBACK DlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    friend BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
-    static void showContextMenu(HWND hWnd);
+    static LRESULT CALLBACK dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    friend BOOL CALLBACK monitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
+    void showContextMenu(HWND hWnd) const;
+    void initDialog(HWND hWnd) const;
+    void saveSettings();
+    void windowState(window_state state) const;
+    void applicationRestart();
 
     // Move inertion
     bool moveLoopIsRunning;
@@ -120,14 +128,14 @@ private:
     mutex sendLocker;
     void sendCurrentVolume();
 
+    const string settingsFilePath;
+    XmlConfigValue<bool, XmlConfigReadWriteFlag> showNotification;
+    XmlConfigValue<bool, XmlConfigReadWriteFlag> soundNotification;
+    XmlConfigValue<bool> tempDirectory;
+    XmlConfigValue<bool, XmlConfigReadWriteFlag> useMoveThread;
+    XmlConfigValue<uint32_t, XmlConfigReadWriteFlag> autoHide;
+
 public:
-    /* Lista wyliczeniowa stau okna */
-    enum window_state {
-        wsDefault,  /**< Bez zmiany stanu okna */
-        wsShow,     /**< Pokazanie okna        */
-        wsHide,     /**< Ukrycie okna          */
-        wsTimedHide /**< Ukrycie okna po 2s    */
-    };
     // Konstruktor - tworzy okno dialogowe oraz ikonê systemow¹
     Gui();
     // Destruktor - usuwa ikonê systemow¹

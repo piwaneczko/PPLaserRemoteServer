@@ -2,10 +2,11 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Laser Remote Server"        
-#define MyAppPublisher "Aircom AI"
-#define MyAppURL "http://www.aircom.ag/" 
+#define MyAppPublisher "Pawel Iwaneczko"
+#define MyAppURL "https://github.com/piwaneczko/PPLaserRemoteServer/releases" 
 #define MyAppExeName "PPLaserRemoteServer.exe"    
-#define MyAppVersion GetFileVersion('install\bin\PPLaserRemoteServer.exe')    
+#define MyAppVersion GetFileVersion('install\bin\PPLaserRemoteServer.exe') 
+#define VC_redist "https://aka.ms/vs/16/release/VC_redist.x86.exe" 
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application.
@@ -22,13 +23,13 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={pf}\{#MyAppPublisher}\{#MyAppName}
-DefaultGroupName={#MyAppPublisher}\{#MyAppName}
+DefaultDirName={pf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
 OutputBaseFilename=ppremotesetup
 OutputDir=install\bin
 WizardImageFile=src\app\resources\image.bmp
 WizardSmallImageFile=src\app\resources\imagesmall.bmp
-WizardImageStretch=False
+WizardImageStretch=True
 Compression=lzma
 SolidCompression=yes
 DisableDirPage=auto      
@@ -55,10 +56,7 @@ Name: {app}; Permissions: users-full
          
 #include <idp.iss>
         
-[InstallDelete]
-Type: files; Name: "{app}\*.*"
-Type: filesandordirs; Name: "{pf}\Silsense Technologies"
-[UninstallDelete]     
+[UninstallDelete]
 Type: files; Name: "{app}\*.*"
 
 [Files]           
@@ -74,13 +72,6 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: 
 [Registry]
 Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: Autostart;
     
-[Code]
-procedure InitializeWizard();
-begin                                                                                          
-    idpAddFileSize('https://aka.ms/vs/15/release/VC_redist.x86.exe', ExpandConstant('{tmp}\vc_redist.x86.exe'), 14426128);
-    idpDownloadAfter(wpReady);
-end;
-
 [Run]                                                                           
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Laser Remote Server"" dir=in action=allow program=""{app}\{#MyAppExeName}"" protocol=TCP enable=yes"; StatusMsg: "Adding exception to firewall for pragram: Laser Remote Server.exe..."; Flags: runhidden; Tasks: Firewall;
 Filename: "{tmp}\vc_redist.x86.exe"; Parameters: "/q /norestart"; StatusMsg: "Installing Visual C++ Redistributable Packages (x86)..."; Flags: runhidden
@@ -89,3 +80,45 @@ Filename: "certutil.exe"; Parameters: "-addstore ""TrustedPublisher"" {tmp}\ppre
 
 [UninstallRun] 
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Laser Remote Server"""; Flags: runhidden; Tasks: Firewall; 
+    
+[Code]
+procedure InitializeWizard();
+begin                                                                                          
+    idpAddFileSize('{#VC_redist}', ExpandConstant('{tmp}\vc_redist.x86.exe'), 14426128);
+    idpDownloadAfter(wpReady);
+end;
+/////////////////////////////////////////////////////////////////////
+function GetUninstallString(): String;
+var
+  sUnInstPath: String;
+  sUnInstallString: String;
+begin
+  sUnInstPath := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{#emit SetupSetting("AppId")}_is1');
+  sUnInstallString := '';
+  if not RegQueryStringValue(HKLM, sUnInstPath, 'UninstallString', sUnInstallString) then
+    RegQueryStringValue(HKCU, sUnInstPath, 'UninstallString', sUnInstallString);
+  Result := sUnInstallString;
+end;
+
+function IsUpgrade(): Boolean;
+begin
+  Result := (GetUninstallString() <> '');
+end;
+    
+function InitializeSetup: Boolean;
+var
+  V: Integer;
+  iResultCode: Integer;
+  sUnInstallString: string;
+begin
+  Result := True; { in case when no previous version is found }
+  if IsUpgrade() then  { Your App GUID/ID }
+  begin
+    sUnInstallString := GetUninstallString();
+    sUnInstallString :=  RemoveQuotes(sUnInstallString);
+    Exec(ExpandConstant(sUnInstallString), '/SILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_SHOW, ewWaitUntilTerminated, iResultCode);
+    Result := True; { if you want to proceed after uninstall }
+    { Exit; //if you want to quit after uninstall }
+  end;
+end;                      
+/////////////////////////////////////////////////////////////////////

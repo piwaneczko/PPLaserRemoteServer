@@ -9,7 +9,7 @@
 #include <filesystem>
 #include <fstream>
 
-namespace fs = experimental::filesystem::v1;
+namespace fs = filesystem;
 
 HRESULT UpdateDownloader::QueryInterface(REFIID riid, void **ppvObject) {
     return bindStatusCallbackReturnCode;

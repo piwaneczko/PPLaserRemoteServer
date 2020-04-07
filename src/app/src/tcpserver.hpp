@@ -8,6 +8,7 @@
 #ifndef IG_TCP_SERVER_H
 #define IG_TCP_SERVER_H
 
+#include <XmlConfig.hpp>
 #include "GUI.hpp"
 
 /**
@@ -15,9 +16,8 @@
  */
 class TCPServer : public Server {
     uint16_t port;
+    XmlConfigValue<uint16_t, XmlConfigReadWriteFlag> defaultPort;
     void mainLoop() override;
-    void init() override;
-    void destroy() override;
     void setServerIPs(uint16_t port);
 
 public:
