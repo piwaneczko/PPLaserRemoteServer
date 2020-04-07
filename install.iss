@@ -3,7 +3,7 @@
 
 #define MyAppName "Laser Remote Server"        
 #define MyAppPublisher "Pawel Iwaneczko"
-#define MyAppURL "http://www.aircom.ag/" 
+#define MyAppURL "https://github.com/piwaneczko/PPLaserRemoteServer/releases" 
 #define MyAppExeName "PPLaserRemoteServer.exe"    
 #define MyAppVersion GetFileVersion('install\bin\PPLaserRemoteServer.exe') 
 #define VC_redist "https://aka.ms/vs/16/release/VC_redist.x86.exe" 

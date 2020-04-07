@@ -1,15 +1,13 @@
 #include <iostream>
 #include "XmlConfig.hpp"
-// Windows.h need to be included after XmlConfig.hpp
-#include <Windows.h>
 using namespace std;
-
-EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 #if XML_CONFIG_NOT_DEFAULT_FILE_PATH
 #define USE_MODULE_PATH 0
 #else
 #define USE_MODULE_PATH 1
+#include <Windows.h>
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #endif
 
 XmlConfig::XmlConfig() {

@@ -1,5 +1,9 @@
 # CHANGELOG.md
 
+## [3.9.0.1] - 2020-04-07
+### Changed
+- Fixed dialogs chrashing after logout.
+
 ## [3.8.0.1] - 2019-06-14
 ### Changed
 - Fixed installation file to install also if previous version don't exists

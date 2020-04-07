@@ -50,7 +50,6 @@ endif()
 target_link_libraries(${PROJECT_NAME} UpdateDownloader XmlConfig)
 add_definitions(-DUNICODE -D_USE_MATH_DEFINES)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E remove "${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:${PROJECT_NAME}>")
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND powershell "Set-AuthenticodeSignature $<TARGET_FILE:${PROJECT_NAME}> -Certificate (Get-ChildItem Cert:\\CurrentUser\\My -CodeSigningCert)")
 
 #######################################
 

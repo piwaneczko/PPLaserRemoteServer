@@ -19,7 +19,7 @@
 #include "shlobj.h"
 
 using namespace std;
-namespace fs = experimental::filesystem;
+namespace fs = filesystem;
 
 #define SWM_TRAYMSG WM_APP  /**< The message ID sent to our window */
 #define SWM_SHOW WM_APP + 1 /**< Show the window                   */
@@ -84,7 +84,7 @@ LRESULT CALLBACK Gui::settingsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lP
                         EndDialog(hWnd, wParam);
                         return 0;
                     default:
-                        return DefWindowProc(hWnd, msg, wParam, lParam);
+                        break;
                 }
             default:
                 break;
@@ -111,7 +111,7 @@ LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     case WM_CONTEXTMENU:
                         gui.showContextMenu(hWnd);
                     default:
-                        return DefWindowProc(hWnd, msg, wParam, lParam);
+                        break;
                 }
             case WM_SYSCOMMAND:
                 if ((wParam & 0xFFF0) == SC_MINIMIZE) {
@@ -157,7 +157,7 @@ LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
                         DestroyWindow(hWnd);
                         break;
                     default:
-                        return DefWindowProc(hWnd, msg, wParam, lParam);
+                        break;
                 }
                 return 1;
             case WM_TIMER:
@@ -168,19 +168,19 @@ LRESULT CALLBACK Gui::dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 PostQuitMessage(0);
                 break;
             default:
-                return DefWindowProc(hWnd, msg, wParam, lParam);
+                break;
         }
     } else {
         // nie ustalono klasy GUI
         switch (msg) {
             case WM_CLOSE:
                 DestroyWindow(hWnd);
-                return 0;
+                break;
             case WM_DESTROY:
                 PostQuitMessage(0);
-                return 0;
+                break;
             default:
-                return DefWindowProc(hWnd, msg, wParam, lParam);
+                break;
         }
     }
     return 0;
@@ -410,10 +410,11 @@ void Gui::windowState(window_state state) const {
 }
 
 void Gui::applicationRestart() {
-    if (clock() > 60 * CLOCKS_PER_SEC) {
+    /*if (clock() > 60 * CLOCKS_PER_SEC) {
         Shell_NotifyIcon(NIM_DELETE, &niData);
         *static_cast<int *>(nullptr) = 0;
-    } else if (!downloadThread.joinable()) {
+    } else*/
+    if (!downloadThread.joinable()) {
         downloadThread = thread(&Gui::downloadLoop, this);
     }
 }

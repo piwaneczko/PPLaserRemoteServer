@@ -1,4 +1,0 @@
-add_subdirectory(app)
-add_subdirectory(savefileversion)
-add_subdirectory(updatedownloader)
-add_subdirectory(xmlconfig)
