@@ -1,11 +1,11 @@
-﻿$Subject = "E=p.iwaneczko@aircom.ag
-            OU=www.aircom.ag
-            CN=Aircom AI"
+﻿$Subject = "E=p.iwaneczko@gmai.com CN=Pawel Iwaneczko S=Poland C=PL"
 
-$cacert = (Get-ChildItem Cert:\CurrentUser\Root\135CEC36F49CB8E93B1AB270CD80884676CE8F33)
+#$cacert = (Get-ChildItem Cert:\CurrentUser\Root\thumbprint)
 
-$Cert = New-SelfSignedCertificate -Subject $Subject -CertStoreLocation Cert:\CurrentUser\My\ -Type Codesigning
+#$cert = New-SelfSignedCertificate -Subject $Subject -CertStoreLocation Cert:\CurrentUser\My\ -Type Codesigning
+$cert = (Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert)
 
-Export-Certificate -Cert $Cert -FilePath ppremote.cer
+Export-Certificate -Cert $cert -FilePath ppremote.cer
 
-Set-AuthenticodeSignature .\ppremote.cer -Certificate $cacert
+#Set-AuthenticodeSignature .\ppremote.cer -Certificate $cacert
+Set-AuthenticodeSignature .\ppremote.cer -Certificate $cert
